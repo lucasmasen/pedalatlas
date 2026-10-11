@@ -110,21 +110,34 @@ writeBrief.run = async (job) => {
     const stages = await stagesOf(job);
     const notes = await notesOf(job);
     const started = Date.now();
-    let brief : string;
+    let brief = "";
     let briefLanguage = language;
-    let step : TraceStep;
+    let step! : TraceStep;
+    let failure = "";
     if (await anthropicKey()) {
-        const out = await haikuClient.generate({messages: briefPrompt(language, stages, notes), outputSchema: BRIEF_SCHEMA});
-        brief = String(out.brief ?? "");
-        briefLanguage = String(out.briefLanguage ?? language);
-        const {inputTokens, outputTokens} = haikuClient.last;
+        try {
+            const out = await haikuClient.generate({messages: briefPrompt(language, stages, notes), outputSchema: BRIEF_SCHEMA});
+            brief = String(out.brief ?? "");
+            briefLanguage = String(out.briefLanguage ?? language);
+            const {inputTokens, outputTokens} = haikuClient.last;
+            step = {
+                step: "Write the rider brief", actor: briefer.id, model: HAIKU, ms: Date.now() - started,
+                inputTokens, outputTokens,
+                costUsd: (inputTokens * HAIKU_PRICE.input + outputTokens * HAIKU_PRICE.output) / 1_000_000,
+                note: "Cheap, fast writer: one short brief per route, translated",
+            };
+        } catch (error) {
+            failure = error instanceof Error ? error.message : "The Claude call failed";
+        }
+    }
+    if (failure) {
+        brief = fallbackBrief(stages, notes);
         step = {
-            step: "Write the rider brief", actor: briefer.id, model: HAIKU, ms: Date.now() - started,
-            inputTokens, outputTokens,
-            costUsd: (inputTokens * HAIKU_PRICE.input + outputTokens * HAIKU_PRICE.output) / 1_000_000,
-            note: "Cheap, fast writer: one short brief per route, translated",
+            step: "Write the rider brief", actor: briefer.id, model: "offline fallback (Claude call failed)",
+            ms: Date.now() - started, inputTokens: 0, outputTokens: 0, costUsd: 0,
+            note: failure,
         };
-    } else {
+    } else if (!(await anthropicKey())) {
         brief = fallbackBrief(stages, notes);
         step = {
             step: "Write the rider brief", actor: briefer.id, model: "offline fallback (set the anthropic-api-key secret)",
