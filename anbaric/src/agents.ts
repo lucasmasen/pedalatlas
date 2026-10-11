@@ -84,7 +84,7 @@ const briefPrompt = (language : string, stages : Array<StageView>, notes : Array
         content: [
             "You write short route briefs for long-distance touring cyclists.",
             `Write in ${language}. Translate the notes; do not quote them in another language.`,
-            "Use only the stages and notes given. Notes are rider accounts, not checked facts: say 'riders report' and keep each note's date.",
+            "Use only the stages and notes given. Notes are rider accounts, not checked facts: attribute each one to riders in the brief's language and keep its date.",
             "Lead with anything about borders, safety, water or where camping is not allowed. If there are no notes, say so plainly.",
             "Never invent towns, distances, rules or services.",
         ].join(" "),
