@@ -48,7 +48,10 @@ type Note = {label : string, placeLabel : string, when : string, text : string};
 type StageView = {title : string, highway : string, distanceKm : number};
 
 const notesOf = async (job : Job) => ((await job.properties.get("relatedNotes")) as Array<Note> | undefined) ?? [];
-const stagesOf = async (job : Job) => ((await job.properties.get("stages")) as Array<StageView> | undefined) ?? [];
+// Models get the stage text only, not map coordinates.
+const stagesOf = async (job : Job) : Promise<Array<StageView>> =>
+    (((await job.properties.get("stages")) as Array<StageView> | undefined) ?? [])
+        .map(({title, highway, distanceKm}) => ({title, highway, distanceKm}));
 
 // ---------- Claude Haiku: the writer ----------
 

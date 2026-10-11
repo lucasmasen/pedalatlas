@@ -4,7 +4,9 @@ const escapeHtml = (value : string) => value.replace(/[&<>"']/g, (character) => 
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;",
 }[character]!));
 
-export const routePage = (places : Array<Place>) => {
+export const routePage = (places : Array<Place>, map : unknown) => {
+    // Safe to inline: JSON with "<" escaped cannot close the script tag.
+    const mapJson = JSON.stringify(map).replace(/</g, "\\u003c");
     const options = places.map((place) => `<option value="${escapeHtml(place.id)}">${escapeHtml(place.name)}</option>`).join("");
     return `<!DOCTYPE html>
 <html lang="en">
@@ -14,6 +16,7 @@ export const routePage = (places : Array<Place>) => {
   <title>PedalAtlas</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,680&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root { --paper: #f4efe4; --ink: #1c1914; --spruce: #1b4332; --spruce-deep: #10281e; --copper: #b85c38; --line: #ddcfc0; --card: #fbf7f0; }
@@ -49,6 +52,9 @@ export const routePage = (places : Array<Place>) => {
     #trace th, #trace td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
     #trace th { font-weight: 600; color: #6a5f54; }
     #trace code { font-size: 0.78rem; }
+    #map { height: 380px; border: 1px solid var(--line); margin-bottom: 0.8rem; background: #e8e2d6; }
+    .legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; font-size: 0.75rem; color: #6a5f54; margin: -0.4rem 0 0.8rem; }
+    .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.3rem; }
     .sample { margin: 0; padding: 0.45rem 1.25rem; background: #efe4d3; color: #6a4a2e; font-size: 0.8rem; }
     @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
   </style>
@@ -74,6 +80,8 @@ export const routePage = (places : Array<Place>) => {
       <p id="status" class="meta" role="status"></p>
     </form>
     <section>
+      <div id="map" role="region" aria-label="Map of the corridor, the planned route and sample rider notes"></div>
+      <div class="legend" id="legend"></div>
       <div id="brief"></div>
       <div id="result"></div>
       <aside id="related" hidden></aside>
@@ -86,6 +94,7 @@ export const routePage = (places : Array<Place>) => {
       Built with Anbaric
     </a>
   </footer>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const start = document.querySelector("#start");
     const end = document.querySelector("#end");
@@ -102,6 +111,35 @@ export const routePage = (places : Array<Place>) => {
     const escapeText = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     }[character]));
+
+    const MAP = ${mapJson};
+    const NEED_COLORS = {road: "#b85c38", stay: "#1b4332", water: "#2b6cb0", resupply: "#8a6d1d", border: "#7b2d8b", safety: "#c0392b", season: "#5b6b73"};
+    const atlasMap = L.map("map", {scrollWheelZoom: false}).setView([60.5, -135], 4);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 12, attribution: "&copy; OpenStreetMap contributors"}).addTo(atlasMap);
+    MAP.segments.forEach((segment) => L.polyline([segment.from, segment.to], {color: "#7d8f86", weight: 2, opacity: 0.6}).bindTooltip(segment.highway).addTo(atlasMap));
+    const placeAt = new Map(MAP.places.map((place) => [place.name, [place.lat, place.lon]]));
+    const notesLayer = L.layerGroup().addTo(atlasMap);
+    const routeLayer = L.layerGroup().addTo(atlasMap);
+    const offsets = new Map();
+    MAP.notes.forEach((note) => {
+      const at = placeAt.get(note.placeLabel);
+      if (!at) return;
+      const count = offsets.get(note.placeLabel) || 0;
+      offsets.set(note.placeLabel, count + 1);
+      const spot = [at[0] + count * 0.12, at[1] + count * 0.2];
+      L.circleMarker(spot, {radius: 6, color: "#fff", weight: 1.5, fillColor: NEED_COLORS[note.need] || "#444", fillOpacity: 0.95})
+        .bindPopup("<strong>" + escapeText(note.label) + "</strong> · " + escapeText(note.placeLabel) + " · " + escapeText(note.when) + "<br>" + escapeText(note.text) + "<br><em>Simulated rider account</em>")
+        .addTo(notesLayer);
+    });
+    document.querySelector("#legend").innerHTML = Object.entries(NEED_COLORS).map(([need, color]) => "<span><i style='background:" + color + "'></i>" + need + "</span>").join("")
+      + "<span>" + MAP.notes.length + " sample notes</span>";
+    const drawRoute = (stages) => {
+      routeLayer.clearLayers();
+      const lines = (stages || []).filter((stage) => stage.from && stage.to).map((stage) => [stage.from, stage.to]);
+      if (!lines.length) return;
+      lines.forEach((line) => L.polyline(line, {color: "#1b4332", weight: 5}).addTo(routeLayer));
+      atlasMap.fitBounds(L.latLngBounds(lines.flat()), {padding: [30, 30]});
+    };
 
     const settled = (job) => {
       const state = String(job.status || "").toLowerCase();
@@ -179,6 +217,7 @@ export const routePage = (places : Array<Place>) => {
         related.hidden = true;
         return;
       }
+      drawRoute(props.stages);
       status.textContent = {assembled: "Claude Haiku is writing the brief…", briefed: "Jev is scoring the risk…", flagged: "Jev flagged it. Claude Opus is reviewing…",
         review: "Jev flagged this brief. A moderator decides before riders see it.", withheld: "Brief withheld."}[job.state] || "Route ready.";
       const stages = (props.stages || []).map((stage) =>

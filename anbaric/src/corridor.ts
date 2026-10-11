@@ -4,7 +4,7 @@ import {fileURLToPath} from "node:url";
 
 export type Place = {id : string, name : string, regionId : string, lat : number, lon : number};
 export type Note = {need : string, label : string, when : string, placeLabel : string, text : string};
-export type Stage = {title : string, highway : string, distanceKm : number};
+export type Stage = {title : string, highway : string, distanceKm : number, from? : [number, number], to? : [number, number]};
 
 type Segment = {fromId : string, toId : string, fromName : string, toName : string, highway : string, km : number};
 type Atlas = {
@@ -28,18 +28,36 @@ const link = (fromId : string, edge : Directed) => {
     graph.set(fromId, edges);
 };
 
+const at = (placeId : string) : [number, number] | undefined => {
+    const place = placesById.get(placeId);
+    return place ? [place.lat, place.lon] : undefined;
+};
+
 for (const segment of atlas.segments) {
     link(segment.fromId, {
         toId: segment.toId,
         km: segment.km,
-        stage: {title: `${segment.fromName} to ${segment.toName}`, highway: segment.highway, distanceKm: segment.km},
+        stage: {title: `${segment.fromName} to ${segment.toName}`, highway: segment.highway, distanceKm: segment.km,
+            from: at(segment.fromId), to: at(segment.toId)},
     });
     link(segment.toId, {
         toId: segment.fromId,
         km: segment.km,
-        stage: {title: `${segment.toName} to ${segment.fromName}`, highway: segment.highway, distanceKm: segment.km},
+        stage: {title: `${segment.toName} to ${segment.fromName}`, highway: segment.highway, distanceKm: segment.km,
+            from: at(segment.toId), to: at(segment.fromId)},
     });
 }
+
+// Everything the public map needs: towns, highway lines and every sample note.
+export const mapData = () => ({
+    places: atlas.places,
+    segments: atlas.segments.flatMap((segment) => {
+        const from = at(segment.fromId);
+        const to = at(segment.toId);
+        return from && to ? [{from, to, highway: segment.highway}] : [];
+    }),
+    notes: Object.values(atlas.chat).flatMap((region) => region.notes),
+});
 
 export const places = () => atlas.places.slice().sort((left, right) => left.name.localeCompare(right.name));
 

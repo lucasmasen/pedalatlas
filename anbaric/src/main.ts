@@ -1,7 +1,7 @@
 import {createServer, IncomingMessage, ServerResponse} from "node:http";
 import {Human, JobPersistenceFactory, QueueFactory, SystemActor, serializeJob} from "anbaric";
 import type {Actor} from "anbaric";
-import {places} from "./corridor.js";
+import {mapData, places} from "./corridor.js";
 import {routesMachine} from "./machine.js";
 import {routePage} from "./page.js";
 
@@ -35,7 +35,7 @@ const handle = async (request : IncomingMessage, response : ServerResponse) => {
 
     if (request.method === "GET" && url.pathname === "/") {
         response.writeHead(200, {"content-type": "text/html; charset=utf-8"});
-        response.end(routePage(places()));
+        response.end(routePage(places(), mapData()));
         return;
     }
 
