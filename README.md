@@ -54,7 +54,7 @@ npm install
 npx tsx src/main.ts
 ```
 
-Open http://localhost:3000, pick two places and a language, then click **Show stages**.
+Open http://localhost:3000, pick two places and a language, then click **Show stages**. The map shows the corridor, the planned route and a pin for each of the 31 simulated rider notes.
 
 - **With no keys** it still runs. Each model step falls back to an offline version and the table says so.
 - **With Claude:** `export ANTHROPIC_API_KEY=...` before starting.
@@ -66,6 +66,14 @@ Deployed on Anbaric Cloud, the same keys are read from the secret store:
 anbaric secrets set anthropic-api-key
 anbaric secrets set ai-gateway-api-key
 anbaric app deploy
+```
+
+### How chat becomes notes (slide demo)
+
+A step-by-step demo of the pipeline on simulated rider texts: redaction, claim extraction, filing by stage and need, and the resulting wiki notes. No private data and no API keys needed.
+
+```bash
+python -m demo.wiki_notes.server   # http://127.0.0.1:8091
 ```
 
 ### The Python wiki and pipeline (optional)
