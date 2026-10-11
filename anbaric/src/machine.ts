@@ -1,6 +1,6 @@
 import {Action, Code, JobPersistence, PropertyDefinition, Queue, State, StateMachine, Transition} from "anbaric";
 import {assembleRoute, knownPlace} from "./corridor.js";
-import {moderatorReview, RISK_THRESHOLD, scoreRisk, writeBrief} from "./agents.js";
+import {moderatorReview, reviewBrief, RISK_THRESHOLD, scoreRisk, writeBrief} from "./agents.js";
 
 const text = (value : unknown) => typeof value === "string";
 
@@ -50,6 +50,12 @@ riskScore.validation = (value) => typeof value === "number" && value >= 0 && val
 const riskReason = new PropertyDefinition("riskReason");
 riskReason.validation = text;
 
+const reviewRecommendation = new PropertyDefinition("reviewRecommendation");
+reviewRecommendation.validation = text;
+
+const reviewNote = new PropertyDefinition("reviewNote");
+reviewNote.validation = text;
+
 const approved = new PropertyDefinition("approved");
 approved.validation = (value) => typeof value === "boolean";
 
@@ -90,8 +96,12 @@ export const routesMachine = (persistence : JobPersistence, queue : Queue) => ne
         ]),
         // Jev decides whether a person must see it first.
         new State("briefed", [scoreRisk], [
-            new Transition("review", async (job) => Number(await job.properties.get("riskScore")) >= RISK_THRESHOLD),
+            new Transition("flagged", async (job) => Number(await job.properties.get("riskScore")) >= RISK_THRESHOLD),
             new Transition("ready", async (job) => await job.properties.has("riskScore")),
+        ]),
+        // Claude Opus reviews only what Jev flagged, and advises the human.
+        new State("flagged", [reviewBrief], [
+            new Transition("review", async (job) => await job.properties.has("reviewNote")),
         ]),
         // A human approves or withholds it.
         new State("review", [moderatorReview], [
@@ -104,7 +114,7 @@ export const routesMachine = (persistence : JobPersistence, queue : Queue) => ne
     ],
     "requested",
     [startId, endId, fromName, toName, distanceKm, stages, relatedTitle, relatedNotes, outcome,
-        language, brief, briefLanguage, riskScore, riskReason, approved, reviewedBy, trace],
+        language, brief, briefLanguage, riskScore, riskReason, reviewRecommendation, reviewNote, approved, reviewedBy, trace],
     persistence,
     queue,
 );

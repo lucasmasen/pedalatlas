@@ -5,7 +5,8 @@ import type {AgentRequest, Job} from "anbaric";
 // Anbaric actor, so the job's audit trail names who did what:
 //   Claude Haiku 5.5  writes the stage brief in the rider's language (cheap, fast writer)
 //   Jev               scores safety and border risk as probabilities (a decision model, not a writer)
-//   A human           approves any brief Jev flags before riders see it
+//   Claude Opus 5.5   reviews only the briefs Jev flags, against the source notes (careful, costly, rare)
+//   A human           approves any flagged brief before riders see it
 // Only the public snapshot (route stages and published notes) reaches a model.
 // Private WhatsApp drafts never do.
 
@@ -23,6 +24,8 @@ export type TraceStep = {
 const HAIKU = "claude-haiku-5-5";
 // Standard API pricing, USD per million tokens (prompts under 100K).
 const HAIKU_PRICE = {input: 0.10, output: 0.50};
+const OPUS = "claude-opus-5-5";
+const OPUS_PRICE = {input: 4.00, output: 20.00};
 const JEV_URL = process.env.JEV_API_URL ?? "https://ai-gateway.vercel.sh/v1/evaluate";
 const JEV_MODEL = process.env.JEV_MODEL ?? "typesafe-ai/jev";
 export const RISK_THRESHOLD = 0.5;
@@ -51,9 +54,10 @@ const stagesOf = async (job : Job) => ((await job.properties.get("stages")) as A
 
 class MeteredClient extends Agent.Client {
     last = {inputTokens: 0, outputTokens: 0};
+    constructor(private model : string, private maxTokens : number) { super(); }
     async generate(request : AgentRequest) {
         const inner = new AnthropicClient(
-            {apiKey: await anthropicKey(), model: HAIKU, maxTokens: 4096},
+            {apiKey: await anthropicKey(), model: this.model, maxTokens: this.maxTokens},
             async (url, init) => {
                 const response = await fetch(url, init);
                 const usage = (await response.clone().json().catch(() => ({})))?.usage ?? {};
@@ -65,7 +69,7 @@ class MeteredClient extends Agent.Client {
     }
 }
 
-const haikuClient = new MeteredClient();
+const haikuClient = new MeteredClient(HAIKU, 4096);
 export const briefer = new Agent("claude-haiku-briefer", "writer", haikuClient);
 
 const BRIEF_SCHEMA = {
@@ -234,3 +238,68 @@ export const moderatorReview = new Await("Moderator approves the brief", "HUMAN"
     "Jev flagged this brief as safety-critical or border advice, so a person signs off before riders see it");
 moderatorReview.fields = ["approved"];
 moderatorReview.resolveUrl = (job) => `/?review=${encodeURIComponent(job.id)}`;
+
+// ---------- Claude Opus: the reviewer ----------
+
+const opusClient = new MeteredClient(OPUS, 16000);
+export const reviewer = new Agent("claude-opus-reviewer", "reviewer", opusClient);
+
+const REVIEW_SCHEMA = {
+    type: "object",
+    properties: {
+        recommendation: {type: "string", enum: ["approve", "edit", "withhold"]},
+        reviewNote: {type: "string", description: "Two or three sentences for the human moderator, in English."},
+    },
+    required: ["recommendation", "reviewNote"],
+    additionalProperties: false,
+};
+
+const reviewPrompt = (brief : string, notes : Array<Note>, reason : string) => [
+    {
+        role: "system" as const,
+        content: [
+            "You check route briefs for long-distance cyclists before a human moderator publishes them.",
+            `A risk model flagged this brief for ${reason} risk.`,
+            "Compare the brief with the source notes. Check that every claim comes from a note, keeps its date, is attributed to riders rather than stated as fact, and that nothing about borders, visas or safety is overstated or invented.",
+            "Recommend approve, edit or withhold, and tell the moderator in plain English exactly what to check.",
+        ].join(" "),
+    },
+    {role: "user" as const, content: JSON.stringify({brief, notes})},
+];
+
+export const reviewBrief = new Action("Review the flagged brief", reviewer,
+    "Claude Opus checks a flagged brief against its source notes and advises the human moderator");
+reviewBrief.run = async (job) => {
+    const brief = String((await job.properties.get("brief")) ?? "");
+    const reason = String((await job.properties.get("riskReason")) ?? "safety");
+    const notes = await notesOf(job);
+    const started = Date.now();
+    let recommendation = "review";
+    let reviewNote = "";
+    let step : TraceStep;
+    try {
+        if (!(await anthropicKey())) throw new Error("No anthropic-api-key secret");
+        const out = await opusClient.generate({messages: reviewPrompt(brief, notes, reason), outputSchema: REVIEW_SCHEMA});
+        recommendation = String(out.recommendation ?? "review");
+        reviewNote = String(out.reviewNote ?? "");
+        const {inputTokens, outputTokens} = opusClient.last;
+        step = {
+            step: "Review the flagged brief", actor: reviewer.id, model: OPUS, ms: Date.now() - started,
+            inputTokens, outputTokens,
+            costUsd: (inputTokens * OPUS_PRICE.input + outputTokens * OPUS_PRICE.output) / 1_000_000,
+            note: `Careful, costly reviewer, used only on flagged briefs. Recommends: ${recommendation}`,
+        };
+    } catch (error) {
+        reviewNote = "No automated review. Check the brief against the notes by hand.";
+        step = {
+            step: "Review the flagged brief", actor: reviewer.id, model: "skipped (Claude call failed)",
+            ms: Date.now() - started, inputTokens: 0, outputTokens: 0, costUsd: 0,
+            note: error instanceof Error ? error.message : "The Claude call failed",
+        };
+    }
+    return new Map<string, unknown>([
+        ["reviewRecommendation", recommendation],
+        ["reviewNote", reviewNote],
+        ["trace", [...await traceOf(job), step]],
+    ]);
+};

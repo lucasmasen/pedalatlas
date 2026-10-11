@@ -130,15 +130,16 @@ export const routePage = (places : Array<Place>) => {
     const renderBrief = (job) => {
       const props = job.properties || {};
       if (!props.brief) {
-        briefBox.innerHTML = ["assembled", "briefed"].includes(job.state) ? "<p class='meta'>Claude is writing the brief…</p>" : "";
+        briefBox.innerHTML = ["assembled", "briefed", "flagged"].includes(job.state) ? "<p class='meta'>Claude is writing the brief…</p>" : "";
         return;
       }
-      const flagged = typeof props.riskScore === "number" && job.state !== "assembled" && job.state !== "briefed" && props.riskScore >= 0.5;
+      const flagged = typeof props.riskScore === "number" && !["assembled", "briefed"].includes(job.state) && props.riskScore >= 0.5;
       const risk = typeof props.riskScore === "number" ? " · Jev " + escapeText(props.riskReason) + " risk " + Number(props.riskScore).toFixed(2) : "";
       let head = "Rider brief" + risk;
       let body = "<p>" + escapeText(props.brief) + "</p>";
       if (job.state === "review") {
         head = "Held for a moderator" + risk;
+        if (props.reviewNote) body += "<p class='meta'><strong>Claude Opus advises " + escapeText(props.reviewRecommendation) + ":</strong> " + escapeText(props.reviewNote) + "</p>";
         body += "<div class='review-actions'><button type='button' data-approve='true'>Approve for riders</button><button type='button' class='withhold' data-approve='false'>Withhold</button></div>";
       } else if (job.state === "withheld") {
         head = "Withheld by a moderator" + risk;
@@ -169,7 +170,7 @@ export const routePage = (places : Array<Place>) => {
         related.hidden = true;
         return;
       }
-      status.textContent = {assembled: "Claude Haiku is writing the brief…", briefed: "Jev is scoring the risk…",
+      status.textContent = {assembled: "Claude Haiku is writing the brief…", briefed: "Jev is scoring the risk…", flagged: "Jev flagged it. Claude Opus is reviewing…",
         review: "Jev flagged this brief. A moderator decides before riders see it.", withheld: "Brief withheld."}[job.state] || "Route ready.";
       const stages = (props.stages || []).map((stage) =>
         '<div class="stage"><strong>' + escapeText(stage.title) + '</strong><p class="meta">' + escapeText(stage.highway) + " · about " + escapeText(stage.distanceKm) + " km</p></div>"
