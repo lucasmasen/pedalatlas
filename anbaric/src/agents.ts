@@ -158,7 +158,7 @@ writeBrief.run = async (job) => {
 
 // ---------- Jev: the decider ----------
 
-type JevAnswers = {safety : number, border : number};
+type JevAnswers = {safety : number, border : number, inputTokens? : number, outputTokens? : number, costUsd? : number};
 
 const probability = (answer : any) : number => {
     const value = answer?.probability ?? answer?.noul ?? answer?.p ?? answer?.value;
@@ -173,15 +173,20 @@ const askJev = async (state : string, key : string) : Promise<JevAnswers> => {
             model: JEV_MODEL,
             state,
             questions: {
-                safety: {type: "boolean", instruction: "Could acting on this brief put a cyclist at physical risk if it is wrong or out of date?"},
-                border: {type: "boolean", instruction: "Does this brief tell a rider what to do about a border, visa, customs or a legal rule?"},
+                safety: {type: "boolean", instructions: "Could acting on this brief put a cyclist at physical risk if it is wrong or out of date?"},
+                border: {type: "boolean", instructions: "Does this brief tell a rider what to do about a border, visa, customs or a legal rule?"},
             },
         }),
     });
     if (!response.ok) throw new Error(`Jev returned ${response.status}`);
     const body = await response.json();
     const answers = body.answers ?? body.result?.answers ?? {};
-    return {safety: probability(answers.safety), border: probability(answers.border)};
+    const cost = Number(body.providerMetadata?.gateway?.cost);
+    return {
+        safety: probability(answers.safety), border: probability(answers.border),
+        inputTokens: body.usage?.inputTokens ?? 0, outputTokens: body.usage?.outputTokens ?? 0,
+        costUsd: Number.isFinite(cost) ? cost : 0,
+    };
 };
 
 // Offline stand-in so the demo still runs without a key. It reads the note
@@ -222,7 +227,7 @@ scoreRisk.run = async (job) => {
     const riskReason = answers.border >= answers.safety ? "border" : "safety";
     const step : TraceStep = {
         step: "Score safety and border risk", actor: decider.id, model, ms: Date.now() - started,
-        inputTokens: 0, outputTokens: 0, costUsd: 0,
+        inputTokens: answers.inputTokens ?? 0, outputTokens: answers.outputTokens ?? 0, costUsd: answers.costUsd ?? 0,
         note: `${note}. safety ${answers.safety.toFixed(2)}, border ${answers.border.toFixed(2)}`,
     };
     return new Map<string, unknown>([
