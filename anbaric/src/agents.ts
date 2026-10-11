@@ -254,8 +254,9 @@ const REVIEW_SCHEMA = {
     properties: {
         recommendation: {type: "string", enum: ["approve", "edit", "withhold"]},
         reviewNote: {type: "string", description: "Two or three sentences for the human moderator, in English."},
+        revisedBrief: {type: "string", description: "If you recommend edit: the whole brief rewritten with your fixes, in the brief's language. Otherwise an empty string."},
     },
-    required: ["recommendation", "reviewNote"],
+    required: ["recommendation", "reviewNote", "revisedBrief"],
     additionalProperties: false,
 };
 
@@ -267,6 +268,7 @@ const reviewPrompt = (brief : string, stages : Array<StageView>, notes : Array<N
             `A risk model flagged this brief for ${reason} risk.`,
             "Compare the brief with the route stages and source notes. Stage distances are straight lines between towns, not road distances, and are a valid source for route facts. Check that every rider claim comes from a note, keeps its date, is attributed to riders rather than stated as fact, and that nothing about borders, visas or safety is overstated or invented.",
             "Recommend approve, edit or withhold, and tell the moderator in plain English exactly what to check.",
+            "If you recommend edit, also rewrite the whole brief with your fixes applied, in the same language and style, so the moderator can publish it in one click.",
         ].join(" "),
     },
     {role: "user" as const, content: JSON.stringify({brief, stages, notes})},
@@ -282,12 +284,14 @@ reviewBrief.run = async (job) => {
     const started = Date.now();
     let recommendation = "review";
     let reviewNote = "";
+    let reviewRevision = "";
     let step : TraceStep;
     try {
         if (!(await anthropicKey())) throw new Error("No anthropic-api-key secret");
         const out = await opusClient.generate({messages: reviewPrompt(brief, stages, notes, reason), outputSchema: REVIEW_SCHEMA});
         recommendation = String(out.recommendation ?? "review");
         reviewNote = String(out.reviewNote ?? "");
+        reviewRevision = recommendation === "edit" ? String(out.revisedBrief ?? "") : "";
         const {inputTokens, outputTokens} = opusClient.last;
         step = {
             step: "Review the flagged brief", actor: reviewer.id, model: OPUS, ms: Date.now() - started,
@@ -306,6 +310,7 @@ reviewBrief.run = async (job) => {
     return new Map<string, unknown>([
         ["reviewRecommendation", recommendation],
         ["reviewNote", reviewNote],
+        ["reviewRevision", reviewRevision],
         ["trace", [...await traceOf(job), step]],
     ]);
 };

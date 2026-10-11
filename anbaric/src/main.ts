@@ -67,15 +67,20 @@ const handle = async (request : IncomingMessage, response : ServerResponse) => {
             const moderator = await rider(request);
             const job = await persistence.retrieve(jobId, SystemActor.actor);
             const trace = (await job.properties.get("trace")) as Array<unknown> ?? [];
-            await routes.updateJob(jobId, new Map<string, unknown>([
+            const revision = String((await job.properties.get("reviewRevision")) ?? "");
+            const useRevision = body.approved === true && body.useRevision === true && revision !== "";
+            const changes = new Map<string, unknown>([
                 ["approved", body.approved],
                 ["reviewedBy", moderator.id],
                 ["trace", [...trace, {
-                    step: body.approved ? "Moderator approved the brief" : "Moderator withheld the brief",
+                    step: !body.approved ? "Moderator withheld the brief"
+                        : useRevision ? "Moderator published Claude Opus's edit" : "Moderator approved the brief",
                     actor: moderator.id, model: "human", ms: 0, inputTokens: 0, outputTokens: 0, costUsd: 0,
                     note: "Jev flagged it, so a person decided",
                 }]],
-            ]), moderator);
+            ]);
+            if (useRevision) changes.set("brief", revision);
+            await routes.updateJob(jobId, changes, moderator);
             send(response, 200, {ok: true});
         } catch (error) {
             send(response, 400, {error: error instanceof Error ? error.message : "That decision was not accepted."});

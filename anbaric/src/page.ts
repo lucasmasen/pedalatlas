@@ -49,6 +49,7 @@ export const routePage = (places : Array<Place>) => {
     #trace th, #trace td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
     #trace th { font-weight: 600; color: #6a5f54; }
     #trace code { font-size: 0.78rem; }
+    .sample { margin: 0; padding: 0.45rem 1.25rem; background: #efe4d3; color: #6a4a2e; font-size: 0.8rem; }
     @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -59,6 +60,7 @@ export const routePage = (places : Array<Place>) => {
       <p class="tagline">Explore further. Ride informed.</p>
     </div>
   </header>
+  <p class="sample">Sample data: every rider note in this demo is simulated. The real group chats stay private.</p>
   <main>
     <form id="route-plan">
       <h2>Plan a route</h2>
@@ -118,10 +120,10 @@ export const routePage = (places : Array<Place>) => {
         + "</tbody></table>";
     };
 
-    const decide = async (jobId, approved) => {
+    const decide = async (jobId, approved, useRevision) => {
       briefBox.querySelectorAll("button").forEach((b) => b.disabled = true);
       const response = await fetch("routes/" + encodeURIComponent(jobId) + "/decision", {
-        method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({approved}),
+        method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({approved, useRevision: Boolean(useRevision)}),
       });
       if (!response.ok) { status.textContent = (await response.json()).error || "That decision was not saved."; return; }
       await follow(jobId, ["ready", "withheld"]);
@@ -140,7 +142,11 @@ export const routePage = (places : Array<Place>) => {
       if (job.state === "review") {
         head = "Held for a moderator" + risk;
         if (props.reviewNote) body += "<p class='meta'><strong>Claude Opus advises " + escapeText(props.reviewRecommendation) + ":</strong> " + escapeText(props.reviewNote) + "</p>";
-        body += "<div class='review-actions'><button type='button' data-approve='true'>Approve for riders</button><button type='button' class='withhold' data-approve='false'>Withhold</button></div>";
+        if (props.reviewRevision) body += "<p><strong>Claude Opus's edit:</strong> " + escapeText(props.reviewRevision) + "</p>";
+        body += "<div class='review-actions'>"
+          + (props.reviewRevision ? "<button type='button' data-approve='true' data-revision='true'>Publish Opus's edit</button>" : "")
+          + "<button type='button' data-approve='true'>" + (props.reviewRevision ? "Publish original" : "Approve for riders") + "</button>"
+          + "<button type='button' class='withhold' data-approve='false'>Withhold</button></div>";
       } else if (job.state === "withheld") {
         head = "Withheld by a moderator" + risk;
         body = "<p>A moderator kept this brief back. The stages below are still shown.</p>";
@@ -152,7 +158,7 @@ export const routePage = (places : Array<Place>) => {
       }
       briefBox.innerHTML = "<div class='brief" + (flagged ? " flagged" : "") + "'><strong>" + head + "</strong>" + body + "</div>";
       briefBox.querySelectorAll("[data-approve]").forEach((button) =>
-        button.addEventListener("click", () => decide(job.id, button.dataset.approve === "true")));
+        button.addEventListener("click", () => decide(job.id, button.dataset.approve === "true", button.dataset.revision === "true")));
     };
 
     const render = (job) => {

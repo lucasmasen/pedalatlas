@@ -56,6 +56,9 @@ reviewRecommendation.validation = text;
 const reviewNote = new PropertyDefinition("reviewNote");
 reviewNote.validation = text;
 
+const reviewRevision = new PropertyDefinition("reviewRevision");
+reviewRevision.validation = text;
+
 const approved = new PropertyDefinition("approved");
 approved.validation = (value) => typeof value === "boolean";
 
@@ -116,7 +119,7 @@ export const routesMachine = (persistence : JobPersistence, queue : Queue) => ne
     ],
     "requested",
     [startId, endId, fromName, toName, distanceKm, stages, relatedTitle, relatedNotes, outcome,
-        language, brief, briefLanguage, riskScore, riskReason, reviewRecommendation, reviewNote, approved, reviewedBy, trace],
+        language, brief, briefLanguage, riskScore, riskReason, reviewRecommendation, reviewNote, reviewRevision, approved, reviewedBy, trace],
     persistence,
     queue,
 );
