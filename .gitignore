@@ -10,3 +10,11 @@ data/*.sqlite-journal
 data/evaluation/latest_report.json
 .DS_Store
 node_modules/
+
+# Private chat data never goes in git
+*.zip
+*.vcf
+/*.txt
+data/
+pedalatlas.egg-info/
+.cursor/

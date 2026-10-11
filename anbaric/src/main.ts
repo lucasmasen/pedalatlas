@@ -45,10 +45,40 @@ const handle = async (request : IncomingMessage, response : ServerResponse) => {
             const job = await routes.startJob(new Map([
                 ["startId", body.startId],
                 ["endId", body.endId],
+                ["language", typeof body.language === "string" && body.language ? body.language : "English"],
+                ["trace", []],
             ]), await rider(request));
             send(response, 201, serializeJob(job));
         } catch (error) {
             send(response, 400, {error: error instanceof Error ? error.message : "The route request was not accepted."});
+        }
+        return;
+    }
+
+    const decision = url.pathname.match(/^\/routes\/([^/]+)\/decision$/);
+    if (request.method === "POST" && decision) {
+        const body = await readJson(request);
+        if (typeof body.approved !== "boolean") {
+            send(response, 400, {error: "Send approved: true or false."});
+            return;
+        }
+        try {
+            const jobId = decodeURIComponent(decision[1]);
+            const moderator = await rider(request);
+            const job = await persistence.retrieve(jobId, SystemActor.actor);
+            const trace = (await job.properties.get("trace")) as Array<unknown> ?? [];
+            await routes.updateJob(jobId, new Map<string, unknown>([
+                ["approved", body.approved],
+                ["reviewedBy", moderator.id],
+                ["trace", [...trace, {
+                    step: body.approved ? "Moderator approved the brief" : "Moderator withheld the brief",
+                    actor: moderator.id, model: "human", ms: 0, inputTokens: 0, outputTokens: 0, costUsd: 0,
+                    note: "Jev flagged it, so a person decided",
+                }]],
+            ]), moderator);
+            send(response, 200, {ok: true});
+        } catch (error) {
+            send(response, 400, {error: error instanceof Error ? error.message : "That decision was not accepted."});
         }
         return;
     }
