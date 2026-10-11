@@ -52,7 +52,7 @@ export const routePage = (places : Array<Place>, map : unknown) => {
     #trace th, #trace td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
     #trace th { font-weight: 600; color: #6a5f54; }
     #trace code { font-size: 0.78rem; }
-    #map { height: 380px; border: 1px solid var(--line); margin-bottom: 0.8rem; background: #e8e2d6; }
+    #map { height: 520px; border: 1px solid var(--line); margin-bottom: 0.8rem; background: #e8e2d6; }
     .legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; font-size: 0.75rem; color: #6a5f54; margin: -0.4rem 0 0.8rem; }
     .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.3rem; }
     .sample { margin: 0; padding: 0.45rem 1.25rem; background: #efe4d3; color: #6a4a2e; font-size: 0.8rem; }
@@ -114,30 +114,39 @@ export const routePage = (places : Array<Place>, map : unknown) => {
 
     const MAP = ${mapJson};
     const NEED_COLORS = {road: "#b85c38", stay: "#1b4332", water: "#2b6cb0", resupply: "#8a6d1d", border: "#7b2d8b", safety: "#c0392b", season: "#5b6b73"};
-    const atlasMap = L.map("map", {scrollWheelZoom: false}).setView([60.5, -135], 4);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 12, attribution: "&copy; OpenStreetMap contributors"}).addTo(atlasMap);
-    MAP.segments.forEach((segment) => L.polyline([segment.from, segment.to], {color: "#7d8f86", weight: 2, opacity: 0.6}).bindTooltip(segment.highway).addTo(atlasMap));
+    const atlasMap = L.map("map", {scrollWheelZoom: true, zoomSnap: 0.5, minZoom: 3, maxZoom: 16}).setView([59.5, -133], 4.5);
+    // Panes fix the stacking order: corridor, then the planned route, then towns, then note pins on top.
+    [["corridor", 410], ["route", 420], ["towns", 630], ["pins", 640]].forEach(([name, z]) => { atlasMap.createPane(name).style.zIndex = z; });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19, attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(atlasMap);
+    MAP.segments.forEach((segment) => L.polyline([segment.from, segment.to], {pane: "corridor", color: "#55655c", weight: 3, opacity: 0.55, dashArray: "6 6"}).bindTooltip(segment.highway, {sticky: true}).addTo(atlasMap));
     const placeAt = new Map(MAP.places.map((place) => [place.name, [place.lat, place.lon]]));
-    const notesLayer = L.layerGroup().addTo(atlasMap);
+    MAP.places.forEach((place) => L.circleMarker([place.lat, place.lon], {pane: "towns", radius: 3, color: "#1c1914", weight: 1, fillColor: "#fbf7f0", fillOpacity: 1})
+      .bindTooltip(escapeText(place.name), {direction: "top", offset: [0, -4]}).addTo(atlasMap));
     const routeLayer = L.layerGroup().addTo(atlasMap);
-    const offsets = new Map();
+    const byPlace = new Map();
     MAP.notes.forEach((note) => {
-      const at = placeAt.get(note.placeLabel);
-      if (!at) return;
-      const count = offsets.get(note.placeLabel) || 0;
-      offsets.set(note.placeLabel, count + 1);
-      const spot = [at[0] + count * 0.12, at[1] + count * 0.2];
-      L.circleMarker(spot, {radius: 6, color: "#fff", weight: 1.5, fillColor: NEED_COLORS[note.need] || "#444", fillOpacity: 0.95})
-        .bindPopup("<strong>" + escapeText(note.label) + "</strong> · " + escapeText(note.placeLabel) + " · " + escapeText(note.when) + "<br>" + escapeText(note.text) + "<br><em>Simulated rider account</em>")
-        .addTo(notesLayer);
+      if (!placeAt.has(note.placeLabel)) return;
+      byPlace.set(note.placeLabel, (byPlace.get(note.placeLabel) || []).concat(note));
+    });
+    byPlace.forEach((notes, placeName) => {
+      notes.sort((left, right) => right.when.localeCompare(left.when));
+      const newest = notes[0];
+      L.circleMarker(placeAt.get(placeName), {pane: "pins", radius: 6 + Math.min(notes.length, 4) * 1.5, color: "#ffffff", weight: 2, fillColor: NEED_COLORS[newest.need] || "#444", fillOpacity: 1})
+        .bindTooltip(escapeText(placeName) + " · " + notes.length + (notes.length === 1 ? " note" : " notes"), {direction: "top", offset: [0, -8]})
+        .bindPopup("<strong>" + escapeText(placeName) + "</strong>" + notes.map((note) =>
+          "<p style='margin:0.45rem 0 0'><span style='color:" + (NEED_COLORS[note.need] || "#444") + ";font-weight:600'>" + escapeText(note.label) + "</span> · " + escapeText(note.when) + "<br>" + escapeText(note.text) + "</p>").join("")
+          + "<p style='margin:0.45rem 0 0'><em>Simulated rider accounts</em></p>", {maxWidth: 300})
+        .addTo(atlasMap);
     });
     document.querySelector("#legend").innerHTML = Object.entries(NEED_COLORS).map(([need, color]) => "<span><i style='background:" + color + "'></i>" + need + "</span>").join("")
-      + "<span>" + MAP.notes.length + " sample notes</span>";
+      + "<span>Pin colour = newest note at that town · " + MAP.notes.length + " sample notes · scroll or pinch to zoom</span>";
     const drawRoute = (stages) => {
       routeLayer.clearLayers();
       const lines = (stages || []).filter((stage) => stage.from && stage.to).map((stage) => [stage.from, stage.to]);
       if (!lines.length) return;
-      lines.forEach((line) => L.polyline(line, {color: "#1b4332", weight: 5}).addTo(routeLayer));
+      lines.forEach((line) => L.polyline(line, {pane: "route", color: "#1b4332", weight: 6, opacity: 0.9}).addTo(routeLayer));
       atlasMap.fitBounds(L.latLngBounds(lines.flat()), {padding: [30, 30]});
     };
 
