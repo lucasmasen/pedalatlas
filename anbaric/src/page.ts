@@ -120,7 +120,7 @@ export const routePage = (places : Array<Place>, map : unknown) => {
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19, attribution: "&copy; OpenStreetMap contributors",
     }).addTo(atlasMap);
-    MAP.segments.forEach((segment) => L.polyline([segment.from, segment.to], {pane: "corridor", color: "#55655c", weight: 3, opacity: 0.55, dashArray: "6 6"}).bindTooltip(segment.highway, {sticky: true}).addTo(atlasMap));
+    MAP.segments.forEach((segment) => L.polyline(segment.path, {pane: "corridor", color: "#55655c", weight: 3, opacity: 0.55, dashArray: "6 6"}).bindTooltip(segment.highway, {sticky: true}).addTo(atlasMap));
     const placeAt = new Map(MAP.places.map((place) => [place.name, [place.lat, place.lon]]));
     MAP.places.forEach((place) => L.circleMarker([place.lat, place.lon], {pane: "towns", radius: 3, color: "#1c1914", weight: 1, fillColor: "#fbf7f0", fillOpacity: 1})
       .bindTooltip(escapeText(place.name), {direction: "top", offset: [0, -4]}).addTo(atlasMap));
@@ -144,7 +144,7 @@ export const routePage = (places : Array<Place>, map : unknown) => {
       + "<span>Pin colour = newest note at that town · " + MAP.notes.length + " sample notes · scroll or pinch to zoom</span>";
     const drawRoute = (stages) => {
       routeLayer.clearLayers();
-      const lines = (stages || []).filter((stage) => stage.from && stage.to).map((stage) => [stage.from, stage.to]);
+      const lines = (stages || []).filter((stage) => stage.path || (stage.from && stage.to)).map((stage) => stage.path || [stage.from, stage.to]);
       if (!lines.length) return;
       lines.forEach((line) => L.polyline(line, {pane: "route", color: "#1b4332", weight: 6, opacity: 0.9}).addTo(routeLayer));
       atlasMap.fitBounds(L.latLngBounds(lines.flat()), {padding: [30, 30]});

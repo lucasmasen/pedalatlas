@@ -4,9 +4,9 @@ import {fileURLToPath} from "node:url";
 
 export type Place = {id : string, name : string, regionId : string, lat : number, lon : number};
 export type Note = {need : string, label : string, when : string, placeLabel : string, text : string};
-export type Stage = {title : string, highway : string, distanceKm : number, from? : [number, number], to? : [number, number]};
+export type Stage = {title : string, highway : string, distanceKm : number, from? : [number, number], to? : [number, number], path? : Array<[number, number]>};
 
-type Segment = {fromId : string, toId : string, fromName : string, toName : string, highway : string, km : number};
+type Segment = {fromId : string, toId : string, fromName : string, toName : string, highway : string, km : number, path? : Array<[number, number]>};
 type Atlas = {
     regions : Array<{id : string, name : string}>,
     places : Array<Place>,
@@ -38,13 +38,13 @@ for (const segment of atlas.segments) {
         toId: segment.toId,
         km: segment.km,
         stage: {title: `${segment.fromName} to ${segment.toName}`, highway: segment.highway, distanceKm: segment.km,
-            from: at(segment.fromId), to: at(segment.toId)},
+            from: at(segment.fromId), to: at(segment.toId), path: segment.path},
     });
     link(segment.toId, {
         toId: segment.fromId,
         km: segment.km,
         stage: {title: `${segment.toName} to ${segment.fromName}`, highway: segment.highway, distanceKm: segment.km,
-            from: at(segment.toId), to: at(segment.fromId)},
+            from: at(segment.toId), to: at(segment.fromId), path: segment.path?.slice().reverse()},
     });
 }
 
@@ -54,7 +54,7 @@ export const mapData = () => ({
     segments: atlas.segments.flatMap((segment) => {
         const from = at(segment.fromId);
         const to = at(segment.toId);
-        return from && to ? [{from, to, highway: segment.highway}] : [];
+        return from && to ? [{path: segment.path ?? [from, to], highway: segment.highway}] : [];
     }),
     notes: Object.values(atlas.chat).flatMap((region) => region.notes),
 });
