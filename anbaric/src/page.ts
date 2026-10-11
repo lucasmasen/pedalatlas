@@ -39,6 +39,16 @@ export const routePage = (places : Array<Place>) => {
     #status { min-height: 1.2rem; }
     footer { padding: 0.8rem 1.25rem 1.1rem; }
     footer a { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; opacity: 0.7; text-decoration: none; color: inherit; }
+    .brief { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--spruce); padding: 0.8rem 1rem; margin: 0.8rem 0; }
+    .brief.flagged { border-left-color: var(--copper); }
+    .brief p { margin: 0.3rem 0 0; line-height: 1.45; }
+    .review-actions { display: flex; gap: 0.5rem; margin-top: 0.7rem; }
+    .review-actions .withhold { background: var(--copper); }
+    #trace { margin-top: 1rem; overflow-x: auto; }
+    #trace table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+    #trace th, #trace td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    #trace th { font-weight: 600; color: #6a5f54; }
+    #trace code { font-size: 0.78rem; }
     @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -55,12 +65,17 @@ export const routePage = (places : Array<Place>) => {
       <p class="meta">A request becomes a route job. Stages and regional chat are attached as it moves.</p>
       <label>From <select id="start" name="startId">${options}</select></label>
       <label>To <select id="end" name="endId">${options}</select></label>
+      <label>Brief language <select id="language" name="language">
+        <option>English</option><option>Español</option><option>Deutsch</option><option>Français</option><option>Português</option>
+      </select></label>
       <button type="submit">Show stages</button>
       <p id="status" class="meta" role="status"></p>
     </form>
     <section>
+      <div id="brief"></div>
       <div id="result"></div>
       <aside id="related" hidden></aside>
+      <section id="trace" hidden></section>
     </section>
   </main>
   <footer>
@@ -76,6 +91,9 @@ export const routePage = (places : Array<Place>) => {
     const status = document.querySelector("#status");
     const result = document.querySelector("#result");
     const related = document.querySelector("#related");
+    const language = document.querySelector("#language");
+    const briefBox = document.querySelector("#brief");
+    const traceBox = document.querySelector("#trace");
     if ([...start.options].some((option) => option.value === "fairbanks")) start.value = "fairbanks";
     if ([...end.options].some((option) => option.value === "whitehorse")) end.value = "whitehorse";
 
@@ -85,11 +103,58 @@ export const routePage = (places : Array<Place>) => {
 
     const settled = (job) => {
       const state = String(job.status || "").toLowerCase();
-      return job.state === "ready" || job.state === "unroutable" || state === "failed" || state === "stalled";
+      return ["ready", "unroutable", "withheld", "review"].includes(job.state) || state === "failed" || state === "stalled";
+    };
+
+    const renderTrace = (props) => {
+      const steps = props.trace || [];
+      if (!steps.length) { traceBox.hidden = true; return; }
+      const total = steps.reduce((sum, step) => sum + (step.costUsd || 0), 0);
+      traceBox.hidden = false;
+      traceBox.innerHTML = "<h2>Who did what</h2><p class='meta'>Each step is an Anbaric actor, recorded in the job's audit trail. Model cost for this route: $" + total.toFixed(5) + "</p>"
+        + "<table><thead><tr><th>Step</th><th>Actor</th><th>Model</th><th>Time</th><th>Tokens in/out</th><th>Cost</th><th>Why this model</th></tr></thead><tbody>"
+        + steps.map((step) => "<tr><td>" + escapeText(step.step) + "</td><td><code>" + escapeText(step.actor) + "</code></td><td><code>" + escapeText(step.model) + "</code></td><td>"
+          + escapeText(step.ms) + " ms</td><td>" + escapeText(step.inputTokens) + " / " + escapeText(step.outputTokens) + "</td><td>$" + Number(step.costUsd || 0).toFixed(5) + "</td><td>" + escapeText(step.note) + "</td></tr>").join("")
+        + "</tbody></table>";
+    };
+
+    const decide = async (jobId, approved) => {
+      briefBox.querySelectorAll("button").forEach((b) => b.disabled = true);
+      const response = await fetch("routes/" + encodeURIComponent(jobId) + "/decision", {
+        method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({approved}),
+      });
+      if (!response.ok) { status.textContent = (await response.json()).error || "That decision was not saved."; return; }
+      await follow(jobId, ["ready", "withheld"]);
+    };
+
+    const renderBrief = (job) => {
+      const props = job.properties || {};
+      if (!props.brief) {
+        briefBox.innerHTML = ["assembled", "briefed"].includes(job.state) ? "<p class='meta'>Claude is writing the brief…</p>" : "";
+        return;
+      }
+      const flagged = typeof props.riskScore === "number" && job.state !== "assembled" && job.state !== "briefed" && props.riskScore >= 0.5;
+      const risk = typeof props.riskScore === "number" ? " · Jev " + escapeText(props.riskReason) + " risk " + Number(props.riskScore).toFixed(2) : "";
+      let head = "Rider brief" + risk;
+      let body = "<p>" + escapeText(props.brief) + "</p>";
+      if (job.state === "review") {
+        head = "Held for a moderator" + risk;
+        body += "<div class='review-actions'><button type='button' data-approve='true'>Approve for riders</button><button type='button' class='withhold' data-approve='false'>Withhold</button></div>";
+      } else if (job.state === "withheld") {
+        head = "Withheld by a moderator" + risk;
+        body = "<p>A moderator kept this brief back. The stages below are still shown.</p>";
+      } else if (job.state === "ready" && props.approved === true) {
+        head = "Rider brief · approved by " + escapeText(props.reviewedBy) + risk;
+      }
+      briefBox.innerHTML = "<div class='brief" + (flagged ? " flagged" : "") + "'><strong>" + head + "</strong>" + body + "</div>";
+      briefBox.querySelectorAll("[data-approve]").forEach((button) =>
+        button.addEventListener("click", () => decide(job.id, button.dataset.approve === "true")));
     };
 
     const render = (job) => {
       const props = job.properties || {};
+      renderBrief(job);
+      renderTrace(props);
       if (String(job.status).toLowerCase() === "failed") {
         status.textContent = "The route stopped. The job failed before the stages were saved.";
         return;
@@ -104,7 +169,8 @@ export const routePage = (places : Array<Place>) => {
         related.hidden = true;
         return;
       }
-      status.textContent = "Route ready.";
+      status.textContent = {assembled: "Claude Haiku is writing the brief…", briefed: "Jev is scoring the risk…",
+        review: "Jev flagged this brief. A moderator decides before riders see it.", withheld: "Brief withheld."}[job.state] || "Route ready.";
       const stages = (props.stages || []).map((stage) =>
         '<div class="stage"><strong>' + escapeText(stage.title) + '</strong><p class="meta">' + escapeText(stage.highway) + " · about " + escapeText(stage.distanceKm) + " km</p></div>"
       ).join("");
@@ -125,13 +191,13 @@ export const routePage = (places : Array<Place>) => {
       }).join("") + "</ul>";
     };
 
-    const follow = (jobId) => new Promise((resolve) => {
+    const follow = (jobId, stopAt) => new Promise((resolve) => {
       let polls = 0;
       const tick = async () => {
         const response = await fetch("routes/" + encodeURIComponent(jobId));
         const job = await response.json();
         render(job);
-        if (settled(job)) return resolve();
+        if (stopAt ? stopAt.includes(job.state) : settled(job)) return resolve();
         if (polls++ >= 30) {
           status.textContent = "Still assembling. Check the job again in a moment.";
           return resolve();
@@ -146,12 +212,14 @@ export const routePage = (places : Array<Place>) => {
       button.disabled = true;
       status.textContent = "Route requested — assembling the stages…";
       result.innerHTML = "";
+      briefBox.innerHTML = "";
+      traceBox.hidden = true;
       related.hidden = true;
       try {
         const response = await fetch("routes", {
           method: "POST",
           headers: {"content-type": "application/json"},
-          body: JSON.stringify({startId: start.value, endId: end.value}),
+          body: JSON.stringify({startId: start.value, endId: end.value, language: language.value}),
         });
         const job = await response.json();
         if (!response.ok) {
@@ -163,6 +231,8 @@ export const routePage = (places : Array<Place>) => {
         button.disabled = false;
       }
     });
+    const reviewId = new URLSearchParams(location.search).get("review");
+    if (reviewId) follow(reviewId);
   </script>
 </body>
 </html>`;
