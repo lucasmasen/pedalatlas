@@ -144,6 +144,9 @@ export const routePage = (places : Array<Place>) => {
       } else if (job.state === "withheld") {
         head = "Withheld by a moderator" + risk;
         body = "<p>A moderator kept this brief back. The stages below are still shown.</p>";
+      } else if (job.state === "ready" && props.reviewRecommendation === "approve" && props.approved === undefined) {
+        head = "Rider brief · approved by Claude Opus review" + risk;
+        if (props.reviewNote) body += "<p class='meta'>" + escapeText(props.reviewNote) + "</p>";
       } else if (job.state === "ready" && props.approved === true) {
         head = "Rider brief · approved by " + escapeText(props.reviewedBy) + risk;
       }
