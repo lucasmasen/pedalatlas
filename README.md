@@ -44,6 +44,12 @@ On the current exports it kept 1,044 claim drafts. All of them stay `private_dra
 
 On the current exports it investigated 13 places, including Anchorage, Fairbanks, Whitehorse, Vancouver, Dease Lake, Haines, and the Cassiar. It recorded 35 context findings. None of them treat a mapped road as safe or legal to ride, and a missing campsite or water point is not stored as a contradiction. Live lookups send coordinates only, never chat text.
 
+## Weather agent
+
+`python -m scripts.run_weather_agent` writes `data/private/weather.sqlite` for the same places. Offline, each place gets a qualitative seasonal note labeled as background, not a forecast and not a climate normal. None of those notes are marked as permanent wiki content.
+
+Open-Meteo is used only when `PEDALATLAS_LIVE_WEATHER=1`. A live response is stored as a current observation and a seven-day forecast, both flagged `do_not_publish`. The request sends coordinates, not chat text. On the current exports the offline run covered 13 places and made no API calls.
+
 ## Run it
 
 ```bash
@@ -54,8 +60,9 @@ pytest
 python -m scripts.inspect_exports
 python -m scripts.run_community_agent
 python -m scripts.run_mapping_agent
+python -m scripts.run_weather_agent
 ```
 
 ## What is next
 
-The weather agent is next. Official information, claim verification, Jev checks, and the map wiki come after that. WhatsApp claims stay private until there is explicit permission to publish.
+The official-information agent is next. Claim verification, Jev checks, and the map wiki come after that. WhatsApp claims stay private until there is explicit permission to publish.
