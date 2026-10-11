@@ -4,7 +4,7 @@ Explore further. Ride informed.
 
 PedalAtlas is a map-based bicycle touring atlas for the Alaska-to-Vancouver corridor. Community notes, maps, weather, and official sources are kept as separate evidence so a claim is not published just because someone said it in chat.
 
-This push is the foundation: read the existing WhatsApp exports, and keep phone numbers and raw conversations out of anything public.
+The first research agent is the community-knowledge agent. It reads the existing WhatsApp exports and stores private claim drafts. It does not publish them.
 
 ## WhatsApp data already in the repo
 
@@ -30,7 +30,15 @@ Repository access is permission to build against the exports, not permission to 
 - Nothing from the chats is sent to an external API.
 - Original zips stay as they are. No second copy is written.
 
-## Run the inspect script
+## Community knowledge agent
+
+`python -m scripts.run_community_agent` parses both exports and writes `data/private/community.sqlite`. That directory is gitignored. The script prints counts, not messages.
+
+On the current exports it kept 1,044 claim drafts. All of them stay `private_draft`, and none are treated as verified facts. 306 are jokes, speculation, opinions, or questions. 42 are personal experiences. 13 are corrections. Support and contradiction links are marked as one community evidence family, so a repeated chat note is not an independent source.
+
+17 drafts mention a place in the Alaska-to-Vancouver gazetteer (Anchorage, Fairbanks, Vancouver, the Cassiar, Williams Lake, Jasper). The other drafts stay unlocated rather than being pinned to a town that was not named. Most of the conversation is south of Vancouver.
+
+## Run it
 
 ```bash
 python3.12 -m venv .venv
@@ -38,10 +46,9 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 python -m scripts.inspect_exports
+python -m scripts.run_community_agent
 ```
-
-`inspect_exports` prints only counts: messages, system lines, media placeholders, and how many senders look like phone numbers.
 
 ## What is next
 
-Claim extraction, the five research agents, Jev publication checks, and the map wiki are not in this commit. Private claims will default to draft and will not be published without permission. The public demo will use synthetic examples, not raw chat.
+The mapping agent is next. Weather, official information, claim verification, Jev checks, and the map wiki come after that. WhatsApp claims stay private until there is explicit permission to publish.
