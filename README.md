@@ -1,71 +1,113 @@
 # PedalAtlas
 
-Explore further. Ride informed.
+**Explore further. Ride informed.**
 
-PedalAtlas is a map-based bicycle touring atlas for the Alaska-to-Vancouver corridor. Community notes, maps, weather, and official sources are kept as separate evidence so a claim is not published just because someone said it in chat.
+Long-distance cyclists plan their routes in huge WhatsApp groups. The tips that matter (a campground that closed, a border rule that changed, where the water is) get buried under thousands of messages in several languages. PedalAtlas turns those chats into route-by-route briefs: pick two towns and get the latest rider notes for each stage, in your language, with anything about safety or borders checked by a person before riders see it.
 
-The first research agent is the community-knowledge agent. It reads the existing WhatsApp exports and stores private claim drafts. It does not publish them.
+Live app (Anbaric Cloud, sign-in required): https://pedalatlas.cloud.anbaric.ai
 
-## WhatsApp data already in the repo
+## Why it takes more than one model
 
-Two German-format exports are already committed as zip files. They were not modified.
+One model can't do this job well on its own. Writing a readable brief, deciding whether that brief could hurt someone, checking it carefully, and taking responsibility for it are different tasks with very different costs. Each route request is an [Anbaric](https://anbaric.ai) job, and each step is done by the actor best suited to it:
 
-| Export | Zip | Uncompressed chat | Dated entries | Of which |
-| --- | --- | --- | --- | --- |
-| Cycling Alaska to the Darien Gap | 268 KB | 715 KB `.txt` plus 13 `.vcf` contact cards | 3,949 | 739 system, 203 media |
-| Cycling South America | 469 KB | 1.2 MB `.txt` plus 28 `.vcf` contact cards | 6,687 | 1,134 system, 562 media |
+| Step | Actor | Why this one |
+|---|---|---|
+| 1. Assemble the route | Code (`route-planner`) | Shortest path over a fixed highway graph. Deterministic, so no model is needed. |
+| 2. Write the brief | **Claude Haiku 5.5** (`claude-haiku-5-5`) | A cheap, fast writer. It summarises the stage notes and translates them into the rider's language (English, Spanish, German, French or Portuguese). |
+| 3. Score the risk | **Jev** (`typesafe-ai/jev` via Vercel AI Gateway) | A decision model, not a writer. It returns calibrated probabilities that the brief is safety-critical or gives border advice, so the review threshold is a number (0.5), not a vibe. |
+| 4. Review flagged briefs | **Claude Opus 5.5** (`claude-opus-5-5`) | A careful, costly reviewer that runs **only on flagged briefs**. It checks every claim against the route data and source notes and tells the moderator what to fix (e.g. a border tip that is second-hand, or advice the brief added that no rider gave). |
+| 5. Approve or withhold | **A person** (Anbaric `Await`) | Anything Jev flags waits for a moderator, who sees Opus's advice. The approval is recorded against the signed-in user. |
 
-Format: `DD.MM.YY, HH:MM - Sender: message`, UTF-8, with multiline messages. There was no existing parser.
+Every step is written to Anbaric's audit trail (`route-planner → claude-haiku-briefer → jev-risk-scorer → claude-opus-reviewer → awaiting a human → moderator`) and shown on the page as a "Who did what" table with the model, time, tokens and cost.
 
-The Alaska chat is the one that overlaps this atlas. Place names that show up there include Anchorage, Fairbanks, Tok, Whitehorse, Cassiar, Vancouver, and a few Cassiar and Highway 97 towns. Most of that chat, and nearly all of the South America chat, is south of Vancouver (Mexico, Central America, Colombia). Those messages stay in the export. They are not forced onto the Alaska–Vancouver map. Almost every sender label is a phone number.
+## Cost
 
-Contact cards (`.vcf`) are ignored. They are address-book data.
+Measured on the live app, Fairbanks → Whitehorse (8 stages, 830 km), brief in Spanish:
+
+| | Per route |
+|---|---|
+| Claude Haiku 5.5 (every route) | about 1,080 input / 750–1,200 output tokens, 4–7 s, **about $0.0005–$0.0008** |
+| Claude Opus 5.5 (flagged routes only) | about 1,100 input / 800–1,100 output tokens, about 11 s, **about $0.021–$0.023** |
+| 1,000 route briefs | **about $0.60** from Haiku, plus about $0.02 for each one Jev flags |
+
+At standard API pricing Haiku costs $0.10 / $0.50 per million input / output tokens and Opus $4 / $20, so Opus is about 30 times the price per brief. That is why it only sees what Jev flags. Jev is billed through Vercel AI Gateway.
 
 ## Privacy
 
-Repository access is permission to build against the exports, not permission to publish them.
+The chats are private group conversations, and the riders in them didn't agree to be published.
 
-- Senders become `rider-` pseudonyms. Phone numbers and display names are not stored by the inspect script.
-- Message text is not printed.
-- Nothing from the chats is sent to an external API.
-- Original zips stay as they are. No second copy is written.
-
-## Community knowledge agent
-
-`python -m scripts.run_community_agent` parses both exports and writes `data/private/community.sqlite`. That directory is gitignored. The script prints counts, not messages.
-
-On the current exports it kept 1,044 claim drafts. All of them stay `private_draft`, and none are treated as verified facts. 306 are jokes, speculation, opinions, or questions. 42 are personal experiences. 13 are corrections. Support and contradiction links are marked as one community evidence family, so a repeated chat note is not an independent source.
-
-17 drafts name a place in the Alaska-to-Vancouver gazetteer. Scanning the redacted messages, not only the drafts, finds 13 of those places. The other drafts stay unlocated rather than being pinned to a town that was not named. Most of the conversation is south of Vancouver.
-
-## Mapping agent
-
-`python -m scripts.run_mapping_agent` reads those place references and writes `data/private/mapping.sqlite`. It uses the local corridor reference: town centroids and schematic highway connections. It does not call OpenStreetMap unless `PEDALATLAS_LIVE_GEO=1`.
-
-On the current exports it investigated 13 places, including Anchorage, Fairbanks, Whitehorse, Vancouver, Dease Lake, Haines, and the Cassiar. It recorded 35 context findings. None of them treat a mapped road as safe or legal to ride, and a missing campsite or water point is not stored as a contradiction. Live lookups send coordinates only, never chat text.
-
-## Weather agent
-
-`python -m scripts.run_weather_agent` writes `data/private/weather.sqlite` for the same places. Offline, each place gets a qualitative seasonal note labeled as background, not a forecast and not a climate normal. None of those notes are marked as permanent wiki content.
-
-Open-Meteo is used only when `PEDALATLAS_LIVE_WEATHER=1`. A live response is stored as a current observation and a seven-day forecast, both flagged `do_not_publish`. The request sends coordinates, not chat text. On the current exports the offline run covered 13 places and made no API calls.
+- **Raw chat exports are not in this repository.** They are processed locally and never committed here.
+- Senders become `rider-` pseudonyms. Phone numbers and emails are removed before anything is stored.
+- **Only the public snapshot reaches a model.** `anbaric/src/atlas.json` holds route stages and a small set of redacted rider notes that have already been cleared for display. Private drafts never leave the laptop.
+- Notes are shown as rider accounts with their dates, never as checked facts.
+- A person approves anything about safety or borders.
 
 ## Run it
 
+### The Anbaric app (the multi-model part)
+
+Requires Node 20 or later.
+
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-pytest
-python -m scripts.inspect_exports
-python -m scripts.run_community_agent
-python -m scripts.run_mapping_agent
-python -m scripts.run_weather_agent
-python -m backend.main
+cd anbaric
+npm install
+npx tsx src/main.ts
 ```
 
-Open http://127.0.0.1:8000. The map shows the corridor. The wiki is a route: pick two places, then read each stage in ride order. A stage shows the latest chat note for road, stay, water, resupply, and season on that leg. A note is filed there only when it names a town on the leg. Notes about other countries stay off the route. Raw chat, phone numbers, and sender names stay unpublished. The official-information agent and the claim-verification agent are on hold.
+Open http://localhost:3000, pick two places and a language, then click **Show stages**.
 
-## What is next
+- **With no keys** it still runs. Each model step falls back to an offline version and the table says so.
+- **With Claude:** `export ANTHROPIC_API_KEY=...` before starting.
+- **With Jev:** `export AI_GATEWAY_API_KEY=...` (a Vercel AI Gateway key; Jev needs paid Gateway credit, the free tier returns 403).
 
-Human review, Jev publication checks, and the two agents on hold. Raw WhatsApp chats stay unpublished. Topic pages keep a distilled record of the notes and newer updates.
+Deployed on Anbaric Cloud, the same keys are read from the secret store:
+
+```bash
+anbaric secrets set anthropic-api-key
+anbaric secrets set ai-gateway-api-key
+anbaric app deploy
+```
+
+### The Python wiki and pipeline (optional)
+
+The Python side parses the chat exports, removes personal details, sorts notes by stage and topic, and serves a local wiki and map. The tests run without any private data. To rebuild the notes, put the WhatsApp `.zip` exports in the repository root; `.gitignore` keeps them, contact cards and `data/` out of git.
+
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest
+python -m scripts.run_community_agent   # needs the exports, writes data/private/
+python -m backend.main                 # http://127.0.0.1:8000
+```
+
+## How it's built
+
+```
+WhatsApp exports (local only)
+  └─ Python: parse → redact → pseudonymise → file notes by stage and need
+       └─ public snapshot: anbaric/src/atlas.json
+            └─ Anbaric app (TypeScript), one job per route request:
+                 requested ─code─▶ assembled ─Claude Haiku─▶ briefed ─Jev─┬─ risk ≥ 0.5 ─▶ flagged ─Claude Opus─▶ review ─human─▶ ready | withheld
+                                                          └─ low risk ──────────────────────────────────────▶ ready
+```
+
+| Path | What it does |
+|---|---|
+| `anbaric/src/machine.ts` | The route state machine |
+| `anbaric/src/agents.ts` | The Haiku, Jev, Opus and moderator steps, plus their offline fallbacks |
+| `anbaric/src/main.ts` | HTTP routes: request a route, read a job, record a moderator decision |
+| `anbaric/src/page.ts` | The route page: language picker, brief, approve/withhold, trace table |
+| `ingestion/`, `agents/`, `backend/` | Python: chat parsing, redaction, stage filing, local wiki |
+
+## Limitations
+
+- Routes are straight lines between towns along public highways. They are not a checked cycling itinerary.
+- The rider-facing scope is Alaska to Vancouver, but most of the chat volume is further south (Mexico to Argentina). Extending the place list is the next step.
+- On Anbaric Cloud a job takes about 30 seconds to pass through all its steps, longer just after a deploy. Locally it takes seconds.
+- Jev needs paid Vercel AI Gateway credit. Without it, the risk step falls back to the categories the published notes already carry, and the trace says so.
+
+## Built with
+
+[Anbaric](https://anbaric.ai) for jobs, agents, human review, audit and hosting · [Claude](https://www.anthropic.com) Haiku 5.5 for briefs and Opus 5.5 for review · [Jev](https://vercel.com/changelog/ai-gateway-now-supports-typesafe-clients-and-an-http-api-for-jev) via Vercel AI Gateway for risk scoring.
+
+Built at the Multi Model Hackathon, SF Tech Week, October 11 2026.
