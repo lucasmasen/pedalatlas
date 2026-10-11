@@ -16,7 +16,7 @@ One model can't do this job well on its own. Writing a readable brief, deciding 
 | 2. Write the brief | **Claude Haiku 5.5** (`claude-haiku-5-5`) | A cheap, fast writer. It summarises the stage notes and translates them into the rider's language (English, Spanish, German, French or Portuguese). |
 | 3. Score the risk | **Jev** (`typesafe-ai/jev` via Vercel AI Gateway) | A decision model, not a writer. It returns calibrated probabilities that the brief is safety-critical or gives border advice, so the review threshold is a number (0.5), not a vibe. |
 | 4. Review flagged briefs | **Claude Opus 5.5** (`claude-opus-5-5`) | A careful, costly reviewer that runs **only on flagged briefs**. It checks every claim against the route data and source notes and tells the moderator what to fix (e.g. a border tip that is second-hand, or advice the brief added that no rider gave). |
-| 5. Approve or withhold | **A person** (Anbaric `Await`) | Anything Jev flags waits for a moderator, who sees Opus's advice. The approval is recorded against the signed-in user. |
+| 5. Approve or withhold | **Claude Opus** for safety flags it approves; otherwise **a person** (Anbaric `Await`) | Border and legal advice always waits for a person. A safety-flagged brief Opus approves is published without waiting. When Opus recommends an edit it writes the corrected brief, and the moderator can publish it in one click. Every approval is recorded against the actor who made it. |
 
 Every step is written to Anbaric's audit trail (`route-planner → claude-haiku-briefer → jev-risk-scorer → claude-opus-reviewer → awaiting a human → moderator`) and shown on the page as a "Who did what" table with the model, time, tokens and cost.
 
