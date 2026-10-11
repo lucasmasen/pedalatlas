@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PedalAtlas · Under the hood</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,680&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --paper: #f4efe4; --ink: #1c1914; --spruce: #1b4332; --spruce-deep: #10281e; --copper: #b85c38; --line: #ddcfc0; --card: #fbf7f0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; color: var(--ink); background: var(--paper); font-family: Outfit, sans-serif; display: grid; grid-template-rows: auto 1fr auto; }
+    header, footer { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.85rem 1.25rem; }
+    header { background: var(--spruce-deep); color: #f6f1e6; }
+    .wordmark { margin: 0; font-family: Fraunces, serif; font-size: 1.45rem; }
+    header p, footer p { margin: 0; }
+    header p { color: #e7d7c4; font-size: 0.85rem; }
+    main { padding: 1.25rem 1.5rem 0.5rem; overflow: auto; }
+    .slide { max-width: 58rem; margin: 0 auto; }
+    .step { margin: 0; color: var(--copper); font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    h2 { font-family: Fraunces, serif; margin: 0.2rem 0 0.35rem; font-size: 2rem; }
+    .lede { margin: 0 0 1rem; max-width: 40rem; line-height: 1.45; }
+    .meta { margin: 0; color: #6a5f54; font-size: 0.85rem; }
+    article { background: var(--card); border: 1px solid var(--line); padding: 0.75rem 0.9rem; margin: 0.55rem 0; }
+    article p { margin: 0.25rem 0 0; line-height: 1.4; }
+    .who { font-weight: 600; }
+    button, .nav button { border: 0; background: var(--spruce); color: #f6f1e6; padding: 0.55rem 0.85rem; font: inherit; cursor: pointer; }
+    button:disabled { opacity: 0.45; cursor: default; }
+    button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; background: var(--card); }
+    th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: #6a5f54; font-weight: 600; }
+    code { font-size: 0.78rem; }
+    .tag { color: var(--copper); font-size: 0.78rem; }
+    .kept { color: var(--spruce); font-size: 0.78rem; font-weight: 600; }
+    .place { margin-top: 0.8rem; }
+    .note { border-left: 4px solid var(--spruce); padding: 0.15rem 0 0.15rem 0.7rem; margin: 0.45rem 0; }
+    footer { border-top: 1px solid var(--line); }
+    .dots { display: flex; gap: 0.4rem; align-items: center; }
+    .dots button { width: 0.7rem; height: 0.7rem; padding: 0; border-radius: 99px; background: var(--line); color: transparent; }
+    .dots button[aria-current="true"] { background: var(--spruce); }
+    .actions { display: flex; gap: 0.5rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="wordmark">PedalAtlas</p>
+      <p>Under the hood · simulated texts</p>
+    </div>
+    <p id="count">1 of 5</p>
+  </header>
+  <main>
+    <section class="slide" data-title="A text arrives">
+      <p class="step">Slide 1</p>
+      <h2>A text arrives</h2>
+      <p class="lede">These are simulated rider texts. Names, a phone number, and an email are still in them. Nothing has been stored.</p>
+      <div id="inbox"></div>
+      <p><button type="button" id="run">Save into the database</button></p>
+    </section>
+    <section class="slide" hidden data-title="The message row">
+      <p class="step">Slide 2 · agents/community.py</p>
+      <h2>The message row</h2>
+      <p class="lede">The community agent stores each text in SQLite. The sender becomes a rider- id. Phone numbers and emails are removed before the row is written.</p>
+      <div id="messages"></div>
+    </section>
+    <section class="slide" hidden data-title="The claim rows">
+      <p class="step">Slide 3 · ingestion/claims.py</p>
+      <h2>The claim rows</h2>
+      <p class="lede">Rules split each stored message into claims. The wiki is allowed to read these rows. It never reads the raw text above.</p>
+      <div id="claims"></div>
+    </section>
+    <section class="slide" hidden data-title="Place notes">
+      <p class="step">Slide 4 · backend/distill.py · backend/testimonies.py</p>
+      <h2>Place notes</h2>
+      <p class="lede">The wiki reads the claim rows and files a note on the place it names. A question stays in the database and does not become a note.</p>
+      <div id="places"></div>
+    </section>
+    <section class="slide" hidden data-title="Topic pages">
+      <p class="step">Slide 5 · backend/distill.py topic_digest</p>
+      <h2>Topic pages</h2>
+      <p class="lede">The same claims are clustered into the topic pages the site serves: a summary, the clearest tip, and the latest update. Haiku is not in this path. It writes a route brief later, from notes that already exist.</p>
+      <div id="topics"></div>
+    </section>
+  </main>
+  <footer>
+    <div class="actions">
+      <button type="button" class="ghost" id="prev">Back</button>
+      <button type="button" id="next">Next</button>
+    </div>
+    <div class="dots" id="dots"></div>
+    <p class="meta" id="status">Arrow keys move between slides.</p>
+  </footer>
+  <script>
+    const slides = [...document.querySelectorAll(".slide")];
+    const inbox = document.querySelector("#inbox");
+    const messages = document.querySelector("#messages");
+    const claims = document.querySelector("#claims");
+    const places = document.querySelector("#places");
+    const topics = document.querySelector("#topics");
+    const count = document.querySelector("#count");
+    const status = document.querySelector("#status");
+    const dots = document.querySelector("#dots");
+    const prev = document.querySelector("#prev");
+    const next = document.querySelector("#next");
+    const run = document.querySelector("#run");
+    let index = 0;
+    let ready = false;
+
+    const escapeText = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[character]));
+
+    slides.forEach((slide, number) => {
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.title = slide.dataset.title;
+      dot.addEventListener("click", () => show(number));
+      dots.appendChild(dot);
+    });
+
+    const show = (number) => {
+      index = Math.max(0, Math.min(slides.length - 1, number));
+      slides.forEach((slide, item) => { slide.hidden = item !== index; });
+      [...dots.children].forEach((dot, item) => dot.setAttribute("aria-current", item === index ? "true" : "false"));
+      count.textContent = (index + 1) + " of " + slides.length;
+      prev.disabled = index === 0;
+      next.disabled = index === slides.length - 1;
+    };
+
+    const renderInbox = (texts) => {
+      inbox.innerHTML = texts.map((text) =>
+        "<article><p class='who'>" + escapeText(text.sender) + " · " + escapeText(text.timestamp.slice(0, 10)) + "</p><p>" + escapeText(text.text) + "</p></article>"
+      ).join("");
+    };
+
+    const renderMessages = (state) => {
+      const rows = state.messages || [];
+      if (!rows.length) {
+        messages.innerHTML = "<p class='meta'>Save the texts on the first slide to fill this table.</p>";
+        return;
+      }
+      messages.innerHTML = "<p class='meta'>" + rows.length + " rows in messages"
+        + (state.redactions ? " · " + state.redactions + " with a phone or email removed" : "") + "</p>"
+        + "<table><thead><tr><th>When</th><th>Sender</th><th>Stored body</th></tr></thead><tbody>"
+        + rows.map((row) => "<tr><td>" + escapeText((row.timestamp || "").slice(0, 10)) + "</td><td><code>" + escapeText(row.sender_pseudo) + "</code></td><td>" + escapeText(row.body) + "</td></tr>").join("")
+        + "</tbody></table>";
+    };
+
+    const renderClaims = (state) => {
+      const rows = state.claims || [];
+      if (!rows.length) {
+        claims.innerHTML = "<p class='meta'>Save the texts on the first slide to fill this table.</p>";
+        return;
+      }
+      const links = (state.links || []).map((link) =>
+        "<article><p class='who'>" + escapeText(link.relation) + "</p><p>" + escapeText(link.note) + "</p><p class='meta'>" + escapeText(link.from_text) + "</p></article>"
+      ).join("");
+      claims.innerHTML = "<table><thead><tr><th>Place</th><th>Kind</th><th>Claim</th><th></th></tr></thead><tbody>"
+        + rows.map((row) => "<tr><td>" + escapeText(row.place_name || "—") + "</td><td>" + escapeText(row.category) + "<br><span class='meta'>" + escapeText(row.epistemic) + "</span></td><td>" + escapeText(row.text) + "</td><td>"
+          + (row.filed ? "<span class='kept'>Filed</span>" : "<span class='tag'>" + escapeText(row.skip_reason) + "</span>")
+          + "</td></tr>").join("")
+        + "</tbody></table>"
+        + (links ? "<h2 style='font-size:1.3rem;margin-top:1rem'>Links between claims</h2>" + links : "");
+    };
+
+    const renderPlaces = (state) => {
+      const rows = state.places || [];
+      if (!state.ready) {
+        places.innerHTML = "<p class='meta'>Save the texts on the first slide to build these notes.</p>";
+        return;
+      }
+      const skipped = (state.claims || []).filter((claim) => !claim.filed);
+      places.innerHTML = rows.map((place) =>
+        "<div class='place'><p class='who'>" + escapeText(place.name) + "</p>"
+        + place.notes.map((note) => "<div class='note'><p class='meta'>" + escapeText(note.when) + " · " + escapeText(note.topic) + (note.correction ? " · correction" : "") + "</p><p>" + escapeText(note.text) + "</p></div>").join("")
+        + "<p class='meta'>testimonies.for_place returned " + place.testimonies.length + ".</p></div>"
+      ).join("")
+      + (skipped.length ? "<p class='meta' style='margin-top:0.8rem'>" + skipped.length + " claims stayed in the database and were not filed.</p>" : "");
+    };
+
+    const renderTopics = (state) => {
+      const rows = state.topics || [];
+      if (!rows.length) {
+        topics.innerHTML = "<p class='meta'>Save the texts on the first slide to build these pages.</p>";
+        return;
+      }
+      topics.innerHTML = rows.map((topic) => {
+        const tips = (topic.tips || []).map((tip) => "<p><strong>" + escapeText(tip.label) + ".</strong> " + escapeText(tip.text) + " <span class='meta'>(" + escapeText(tip.support) + ")</span></p>").join("");
+        const updates = (topic.updates || []).slice(0, 2).map((update) => "<p class='meta'>" + escapeText(update.when) + " · " + escapeText(update.kind) + " · " + escapeText(update.text) + "</p>").join("");
+        return "<article><p class='who'>" + escapeText(topic.title) + "</p><p>" + escapeText(topic.summary) + "</p>" + tips + updates + "</article>";
+      }).join("");
+    };
+
+    const paint = (state) => {
+      ready = Boolean(state.ready);
+      renderMessages(state);
+      renderClaims(state);
+      renderPlaces(state);
+      renderTopics(state);
+      status.textContent = ready
+        ? "Saved in the local demo database. Arrow keys move between slides."
+        : "Arrow keys move between slides.";
+    };
+
+    run.addEventListener("click", async () => {
+      run.disabled = true;
+      status.textContent = "Storing messages and filing notes…";
+      try {
+        const response = await fetch("/api/run", {method: "POST"});
+        paint(await response.json());
+        show(1);
+      } finally {
+        run.disabled = false;
+      }
+    });
+    prev.addEventListener("click", () => show(index - 1));
+    next.addEventListener("click", () => show(index + 1));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight") show(index + 1);
+      if (event.key === "ArrowLeft") show(index - 1);
+    });
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      const inboxResponse = await fetch("/api/inbox");
+      renderInbox((await inboxResponse.json()).texts);
+      const stateResponse = await fetch("/api/state");
+      paint(await stateResponse.json());
+      show(0);
+    });
+  </script>
+</body>
+</html>
