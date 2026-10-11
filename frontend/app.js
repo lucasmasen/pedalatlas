@@ -104,10 +104,12 @@ async function selectPlace(locationId) {
     <div class="season">
       <strong>Seasonal background</strong>
       <p>${escapeHtml(place.season.summary)}</p>
-      <p class="meta">Not permanent wiki content. Official road and weather checks are still on hold.</p>
+      <p class="meta">Background only, not a forecast. The published wiki page repeats this limit.</p>
     </div>
+    <p><button type="button" id="open-wiki-place">Open wiki page</button></p>
     <p class="private">${escapeHtml(draftText)} Published community claims: ${place.community.published}.</p>
   `;
+  sheet.querySelector("#open-wiki-place").addEventListener("click", () => window.openWiki?.(locationId));
 }
 
 async function boot() {
@@ -132,6 +134,7 @@ async function boot() {
     state.showNearby = event.target.checked;
     drawMap();
   });
+  window.atlasMap = state.map;
 }
 
 boot();

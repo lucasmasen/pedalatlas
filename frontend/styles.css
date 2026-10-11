@@ -43,11 +43,192 @@ header {
 
 .tagline { color: #d5c7b2; font-size: 0.92rem; }
 
-.scope {
+.scope, .views button {
   font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #e7b79a;
+}
+
+.views { display: flex; gap: 0.35rem; }
+
+.views button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #f6f1e6;
+  font: inherit;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+}
+
+.views button[aria-current="true"] { border-color: #e7b79a; color: #e7b79a; }
+
+#view-wiki {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  background: var(--paper);
+}
+
+#view-wiki[hidden], #guide[hidden], #view-map[hidden] { display: none; }
+
+.wiki-page { overflow: auto; padding: 1.25rem 1.5rem 3rem; }
+
+.wiki-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.lede { font-size: 1.05rem; }
+
+.infobox {
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 0.8rem 0.9rem 1rem;
+}
+
+.infobox h3 {
+  margin: 0 0 0.6rem;
+  font-family: Fraunces, serif;
+  font-size: 1.15rem;
+}
+
+.infobox dl { margin: 0; }
+.infobox div { display: grid; grid-template-columns: 7.2rem 1fr; gap: 0.35rem; padding: 0.28rem 0; border-top: 1px solid var(--line); }
+.infobox dt { color: #6a5f54; }
+.infobox dd { margin: 0; }
+
+details { border-top: 1px solid var(--line); padding: 0.35rem 0; }
+summary { cursor: pointer; font-weight: 600; padding: 0.35rem 0; }
+details p, details li { margin-top: 0.35rem; }
+
+.route-plan { display: grid; gap: 0.45rem; margin-bottom: 0.9rem; }
+.route-plan label { display: grid; gap: 0.2rem; font-size: 0.85rem; }
+.route-plan button {
+  border: 1px solid var(--line);
+  background: var(--spruce);
+  color: #f6f1e6;
+  font: inherit;
+  padding: 0.45rem 0.55rem;
+  cursor: pointer;
+}
+.stage-card { border-top: 1px solid var(--line); padding: 0.7rem 0; }
+.stage-card button {
+  border: 0;
+  background: transparent;
+  color: var(--spruce);
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+}
+.stage-card ul { margin: 0.35rem 0 0; padding-left: 1.1rem; }
+
+.wiki-search { display: grid; gap: 0.25rem; font-size: 0.85rem; margin-bottom: 0.7rem; }
+.wiki-search input, .wiki-search select, #guide-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 0.45rem 0.5rem;
+}
+
+#related-notes { margin-bottom: 0.9rem; }
+#related-notes ul { list-style: none; margin: 0; padding: 0; max-height: 18rem; overflow: auto; }
+#related-notes button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.4rem 0.1rem;
+  cursor: pointer;
+}
+#related-notes button span { display: block; color: var(--copper); font-size: 0.78rem; }
+#related-notes button em {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-style: normal;
+  font-size: 0.82rem;
+}
+#trending-list, #wiki-list { list-style: none; margin: 0; padding: 0; }
+#trending-list { margin-bottom: 0.8rem; }
+#trending-list button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.45rem 0.1rem;
+  cursor: pointer;
+}
+#trending-list button span { display: block; color: var(--copper); font-size: 0.78rem; letter-spacing: 0.04em; }
+#wiki-list button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 0.55rem 0.1rem;
+  cursor: pointer;
+}
+#wiki-list button span { display: block; color: #6a5f54; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+#wiki-list button[aria-current="true"] strong { color: var(--spruce); }
+
+.wiki-links { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.wiki-links button, #open-wiki-place, #guide-form button, #close-guide {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--spruce);
+  font: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+}
+
+#guide {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(420px, calc(100vw - 2rem));
+  max-height: min(70vh, 640px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 40px rgba(28, 25, 20, 0.16);
+  z-index: 1000;
+}
+
+.guide-head { display: flex; justify-content: space-between; align-items: center; }
+.guide-head h2 { margin: 0; }
+#guide-log { overflow: auto; display: grid; gap: 0.6rem; }
+.guide-user p, .guide-agent p { margin: 0.2rem 0; }
+.guide-user { justify-self: end; max-width: 90%; background: #ead9c4; padding: 0.45rem 0.6rem; }
+.guide-agent { background: #e7eef0; padding: 0.55rem 0.65rem; }
+#guide-form { display: flex; gap: 0.4rem; }
+#guide ol { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+
+@media (max-width: 900px) {
+  #view-wiki, .wiki-layout { grid-template-columns: 1fr; }
+  .wiki-index { max-height: 40vh; }
 }
 
 .banner {

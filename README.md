@@ -64,8 +64,8 @@ python -m scripts.run_weather_agent
 python -m backend.main
 ```
 
-Open http://127.0.0.1:8000. The map shows the corridor, highway connections, and seasonal background. Place pages can count unpublished community drafts, and they do not include the draft wording. The official-information agent and the claim-verification agent are on hold.
+Open http://127.0.0.1:8000. The map shows the corridor. The wiki is a route: pick two places, then read each stage in ride order. A stage shows the latest chat note for road, stay, water, resupply, and season on that leg. A note is filed there only when it names a town on the leg. Notes about other countries stay off the route. Raw chat, phone numbers, and sender names stay unpublished. The official-information agent and the claim-verification agent are on hold.
 
 ## What is next
 
-Human review, Jev publication checks, and the two agents on hold. WhatsApp claims stay private until there is explicit permission to publish.
+Human review, Jev publication checks, and the two agents on hold. Raw WhatsApp chats stay unpublished. Topic pages keep a distilled record of the notes and newer updates.

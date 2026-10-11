@@ -16,10 +16,14 @@
       <p class="wordmark">PedalAtlas</p>
       <p class="tagline">Explore further. Ride informed.</p>
     </div>
-    <p class="scope">Alaska to Vancouver</p>
+    <nav class="views" aria-label="Atlas sections">
+      <button type="button" id="show-map" aria-current="true">Map</button>
+      <button type="button" id="show-wiki">Wiki</button>
+      <button type="button" id="show-guide">Guide</button>
+    </nav>
   </header>
-  <p class="banner">Community chat stays private. This map is geographic orientation, not a verified cycling route.</p>
-  <main>
+  <p class="banner">Plan a route. Each stage shows the latest chat note for that stretch. Notes that name another country stay off the route.</p>
+  <main id="view-map">
     <aside class="rail" aria-label="Corridor anchors">
       <h2>Anchors</h2>
       <ul id="anchor-list"></ul>
@@ -32,7 +36,50 @@
       <p>Straight lines connect towns along public highways. A line does not mean the road is open, paved, or legal to ride.</p>
     </article>
   </main>
+  <section id="view-wiki" hidden>
+    <aside class="rail wiki-index" aria-label="Wiki index">
+      <form id="route-plan" class="route-plan">
+        <label>From
+          <select id="route-start" name="start"></select>
+        </label>
+        <label>To
+          <select id="route-end" name="end"></select>
+        </label>
+        <button type="submit">Show stages</button>
+      </form>
+      <div id="related-notes" hidden></div>
+      <p class="meta">Trending</p>
+      <ul id="trending-list"></ul>
+      <label class="wiki-search">Search stages
+        <input id="wiki-query" type="search" placeholder="Tok, Alaska Highway…">
+      </label>
+      <label class="wiki-search">Category
+        <select id="wiki-category">
+          <option value="all">All published pages</option>
+        </select>
+      </label>
+      <ul id="wiki-list"></ul>
+    </aside>
+    <article class="wiki-page" id="wiki-page" aria-live="polite">
+      <p class="eyebrow">Published orientation</p>
+      <h2>Alaska to Vancouver corridor</h2>
+      <p>Choose a page. These articles state only what the public reference set supports.</p>
+    </article>
+  </section>
+  <section id="guide" hidden aria-label="Wiki guide">
+    <div class="guide-head">
+      <h2>Guide</h2>
+      <button type="button" id="close-guide">Close</button>
+    </div>
+    <p class="meta">Searches published wiki pages and sketches schematic routes. It does not read unpublished chat or call an outside model.</p>
+    <div id="guide-log"></div>
+    <form id="guide-form">
+      <input id="guide-input" name="message" maxlength="500" placeholder="Route from Fairbanks to Whitehorse" required>
+      <button type="submit">Ask</button>
+    </form>
+  </section>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/wiki.js"></script>
 </body>
 </html>
