@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PedalAtlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,680&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="wordmark">PedalAtlas</p>
+      <p class="tagline">Explore further. Ride informed.</p>
+    </div>
+    <p class="scope">Alaska to Vancouver</p>
+  </header>
+  <p class="banner">Community chat stays private. This map is geographic orientation, not a verified cycling route.</p>
+  <main>
+    <aside class="rail" aria-label="Corridor anchors">
+      <h2>Anchors</h2>
+      <ul id="anchor-list"></ul>
+      <label class="toggle"><input id="show-nearby" type="checkbox"> Show nearby places</label>
+    </aside>
+    <div id="map" role="region" aria-label="Corridor map"></div>
+    <article class="sheet" id="sheet" aria-live="polite">
+      <p class="eyebrow">Select a place</p>
+      <h2>The corridor</h2>
+      <p>Straight lines connect towns along public highways. A line does not mean the road is open, paved, or legal to ride.</p>
+    </article>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

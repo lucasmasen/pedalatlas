@@ -61,8 +61,11 @@ python -m scripts.inspect_exports
 python -m scripts.run_community_agent
 python -m scripts.run_mapping_agent
 python -m scripts.run_weather_agent
+python -m backend.main
 ```
+
+Open http://127.0.0.1:8000. The map shows the corridor, highway connections, and seasonal background. Place pages can count unpublished community drafts, and they do not include the draft wording. The official-information agent and the claim-verification agent are on hold.
 
 ## What is next
 
-The official-information agent is next. Claim verification, Jev checks, and the map wiki come after that. WhatsApp claims stay private until there is explicit permission to publish.
+Human review, Jev publication checks, and the two agents on hold. WhatsApp claims stay private until there is explicit permission to publish.
