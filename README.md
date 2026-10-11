@@ -36,7 +36,13 @@ Repository access is permission to build against the exports, not permission to 
 
 On the current exports it kept 1,044 claim drafts. All of them stay `private_draft`, and none are treated as verified facts. 306 are jokes, speculation, opinions, or questions. 42 are personal experiences. 13 are corrections. Support and contradiction links are marked as one community evidence family, so a repeated chat note is not an independent source.
 
-17 drafts mention a place in the Alaska-to-Vancouver gazetteer (Anchorage, Fairbanks, Vancouver, the Cassiar, Williams Lake, Jasper). The other drafts stay unlocated rather than being pinned to a town that was not named. Most of the conversation is south of Vancouver.
+17 drafts name a place in the Alaska-to-Vancouver gazetteer. Scanning the redacted messages, not only the drafts, finds 13 of those places. The other drafts stay unlocated rather than being pinned to a town that was not named. Most of the conversation is south of Vancouver.
+
+## Mapping agent
+
+`python -m scripts.run_mapping_agent` reads those place references and writes `data/private/mapping.sqlite`. It uses the local corridor reference: town centroids and schematic highway connections. It does not call OpenStreetMap unless `PEDALATLAS_LIVE_GEO=1`.
+
+On the current exports it investigated 13 places, including Anchorage, Fairbanks, Whitehorse, Vancouver, Dease Lake, Haines, and the Cassiar. It recorded 35 context findings. None of them treat a mapped road as safe or legal to ride, and a missing campsite or water point is not stored as a contradiction. Live lookups send coordinates only, never chat text.
 
 ## Run it
 
@@ -47,8 +53,9 @@ pip install -e ".[dev]"
 pytest
 python -m scripts.inspect_exports
 python -m scripts.run_community_agent
+python -m scripts.run_mapping_agent
 ```
 
 ## What is next
 
-The mapping agent is next. Weather, official information, claim verification, Jev checks, and the map wiki come after that. WhatsApp claims stay private until there is explicit permission to publish.
+The weather agent is next. Official information, claim verification, Jev checks, and the map wiki come after that. WhatsApp claims stay private until there is explicit permission to publish.
