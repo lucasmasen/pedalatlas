@@ -41,6 +41,19 @@
     .dots button { width: 0.7rem; height: 0.7rem; padding: 0; border-radius: 99px; background: var(--line); color: transparent; }
     .dots button[aria-current="true"] { background: var(--spruce); }
     .actions { display: flex; gap: 0.5rem; }
+    #inbox.chat { background: #e9efe6; border: 1px solid var(--line); padding: 0.6rem 0.8rem; max-width: 40rem; }
+    #inbox.chat article { border: 0; border-radius: 10px; box-shadow: 0 1px 0 rgba(0,0,0,0.07); max-width: 34rem; }
+    #inbox.chat article.typing { color: #6a5f54; font-style: italic; width: 7rem; }
+    #inbox.chat article.chatter { opacity: 0.7; }
+    .chat-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
+    .live { color: #c0392b; font-size: 0.7rem; letter-spacing: 0.05em; font-weight: 600; }
+    .live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #c0392b; margin-right: 0.3rem; animation: blink 1s infinite; }
+    .chip { display: inline-block; margin-top: 0.3rem; padding: 0.05rem 0.5rem; border-radius: 99px; font-size: 0.72rem; background: var(--spruce); color: #fff; }
+    .chip.skip { background: #b9b0a4; }
+    .reveal { animation: pop 0.45s ease-out both; }
+    #play { background: #c0392b; }
+    @keyframes pop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @keyframes blink { 50% { opacity: 0.2; } }
   </style>
 </head>
 <body>
@@ -57,7 +70,7 @@
       <h2>A text arrives</h2>
       <p class="lede">These are simulated rider texts. Names, a phone number, and an email are still in them. Nothing has been stored.</p>
       <div id="inbox"></div>
-      <p><button type="button" id="run">Save into the database</button></p>
+      <p class="actions"><button type="button" id="play">▶ Play live</button><button type="button" id="run">Save into the database</button></p>
     </section>
     <section class="slide" hidden data-title="The message row">
       <p class="step">Slide 2 · agents/community.py</p>
@@ -86,6 +99,7 @@
   </main>
   <footer>
     <div class="actions">
+      <button type="button" class="ghost" id="pause" hidden>Pause</button>
       <button type="button" class="ghost" id="prev">Back</button>
       <button type="button" id="next">Next</button>
     </div>
@@ -127,6 +141,12 @@
       count.textContent = (index + 1) + " of " + slides.length;
       prev.disabled = index === 0;
       next.disabled = index === slides.length - 1;
+      [...slides[index].querySelectorAll("article, tbody tr, .note, .place")].forEach((element, item) => {
+        element.classList.remove("reveal");
+        void element.offsetWidth;
+        element.style.animationDelay = Math.min(item * 120, 2400) + "ms";
+        element.classList.add("reveal");
+      });
     };
 
     const renderInbox = (texts) => {
@@ -215,6 +235,52 @@
         run.disabled = false;
       }
     });
+    // Live mode: texts arrive one by one, then the pipeline runs and the slides advance by themselves.
+    const play = document.querySelector("#play");
+    const pause = document.querySelector("#pause");
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const CHATTER = [
+      {sender: "Jo Park", text: "Anyone else heading out of Fairbanks this week? 🚲"},
+      {sender: "Ana Ruiz", text: "lol my tent still smells like last night's campfire"},
+      {sender: "Jo Park", text: "👍 following"},
+    ];
+    let texts = [];
+    let autoplay = false;
+    const bubble = (who, body, extra) =>
+      "<p class='who'>" + escapeText(who) + "</p><p>" + escapeText(body) + "</p>" + (extra || "");
+    play.addEventListener("click", async () => {
+      play.disabled = true; run.disabled = true;
+      show(0);
+      inbox.className = "chat";
+      inbox.innerHTML = "<div class='chat-head'><span>Cycling Alaska to Vancouver</span><span class='live'>SIMULATED LIVE</span></div>";
+      const script = [];
+      texts.forEach((text, item) => { script.push(text); if (item % 3 === 1 && item / 3 < CHATTER.length) script.push({...CHATTER[Math.floor(item / 3)], chatter: true}); });
+      for (const line of script) {
+        const card = document.createElement("article");
+        card.className = "typing reveal";
+        card.textContent = line.sender + " is typing…";
+        inbox.appendChild(card);
+        card.scrollIntoView({block: "nearest", behavior: "smooth"});
+        await sleep(650);
+        const when = line.timestamp ? " · " + line.timestamp.slice(0, 10) : "";
+        card.className = "reveal" + (line.chatter ? " chatter" : "");
+        card.innerHTML = bubble(line.sender + when, line.text,
+          line.chatter ? "<span class='chip skip'>chatter · skipped</span>" : "<span class='chip'>new text · queued for the pipeline</span>");
+        await sleep(line.chatter ? 500 : 900);
+      }
+      status.textContent = "Storing messages and filing notes…";
+      await sleep(600);
+      const response = await fetch("/api/run", {method: "POST"});
+      paint(await response.json());
+      play.disabled = false; run.disabled = false;
+      autoplay = true; pause.hidden = false; pause.textContent = "Pause";
+      for (let slide = 1; slide < slides.length && autoplay; slide++) {
+        show(slide);
+        await sleep(5500);
+      }
+      autoplay = false; pause.hidden = true;
+    });
+    pause.addEventListener("click", () => { autoplay = false; pause.hidden = true; });
     prev.addEventListener("click", () => show(index - 1));
     next.addEventListener("click", () => show(index + 1));
     document.addEventListener("keydown", (event) => {
@@ -224,7 +290,8 @@
 
     document.addEventListener("DOMContentLoaded", async () => {
       const inboxResponse = await fetch("/api/inbox");
-      renderInbox((await inboxResponse.json()).texts);
+      texts = (await inboxResponse.json()).texts;
+      renderInbox(texts);
       const stateResponse = await fetch("/api/state");
       paint(await stateResponse.json());
       show(0);
