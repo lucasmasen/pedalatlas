@@ -254,17 +254,17 @@ const REVIEW_SCHEMA = {
     additionalProperties: false,
 };
 
-const reviewPrompt = (brief : string, notes : Array<Note>, reason : string) => [
+const reviewPrompt = (brief : string, stages : Array<StageView>, notes : Array<Note>, reason : string) => [
     {
         role: "system" as const,
         content: [
             "You check route briefs for long-distance cyclists before a human moderator publishes them.",
             `A risk model flagged this brief for ${reason} risk.`,
-            "Compare the brief with the source notes. Check that every claim comes from a note, keeps its date, is attributed to riders rather than stated as fact, and that nothing about borders, visas or safety is overstated or invented.",
+            "Compare the brief with the route stages and source notes. Stage distances are straight lines between towns, not road distances, and are a valid source for route facts. Check that every rider claim comes from a note, keeps its date, is attributed to riders rather than stated as fact, and that nothing about borders, visas or safety is overstated or invented.",
             "Recommend approve, edit or withhold, and tell the moderator in plain English exactly what to check.",
         ].join(" "),
     },
-    {role: "user" as const, content: JSON.stringify({brief, notes})},
+    {role: "user" as const, content: JSON.stringify({brief, stages, notes})},
 ];
 
 export const reviewBrief = new Action("Review the flagged brief", reviewer,
@@ -273,13 +273,14 @@ reviewBrief.run = async (job) => {
     const brief = String((await job.properties.get("brief")) ?? "");
     const reason = String((await job.properties.get("riskReason")) ?? "safety");
     const notes = await notesOf(job);
+    const stages = await stagesOf(job);
     const started = Date.now();
     let recommendation = "review";
     let reviewNote = "";
     let step : TraceStep;
     try {
         if (!(await anthropicKey())) throw new Error("No anthropic-api-key secret");
-        const out = await opusClient.generate({messages: reviewPrompt(brief, notes, reason), outputSchema: REVIEW_SCHEMA});
+        const out = await opusClient.generate({messages: reviewPrompt(brief, stages, notes, reason), outputSchema: REVIEW_SCHEMA});
         recommendation = String(out.recommendation ?? "review");
         reviewNote = String(out.reviewNote ?? "");
         const {inputTokens, outputTokens} = opusClient.last;
