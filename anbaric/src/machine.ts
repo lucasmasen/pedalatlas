@@ -104,8 +104,11 @@ export const routesMachine = (persistence : JobPersistence, queue : Queue) => ne
         ]),
         // Claude Opus reviews only what Jev flagged, and advises the human.
         new State("flagged", [reviewBrief], [
-            // Opus is confident: publish without waiting for a person (ADR-005).
-            new Transition("ready", async (job) => await job.properties.get("reviewRecommendation") === "approve"),
+            // Opus approves a safety flag: publish without waiting (ADR-005).
+            // Border and legal advice always waits for a person.
+            new Transition("ready", async (job) =>
+                await job.properties.get("reviewRecommendation") === "approve"
+                && await job.properties.get("riskReason") !== "border"),
             new Transition("review", async (job) => await job.properties.has("reviewNote")),
         ]),
         // A human approves or withholds it.

@@ -23,7 +23,7 @@ Every note shown to a rider is attributed to riders and keeps its date. Briefs n
 
 ## ADR-005: A person signs off on risky advice
 
-A brief flagged for safety or border risk is never shown to riders as approved unless a person approves it, or Claude Opus reviews it and recommends `approve`. A brief Opus recommends editing or withholding always waits for a person. Every approval is recorded in the Anbaric audit trail against the actor who made it.
+A brief flagged for border, visa, customs or legal risk is never shown to riders until a person approves it, whatever Claude Opus recommends. A brief flagged only for safety may be published when Claude Opus reviews it and recommends `approve`. A brief Opus recommends editing or withholding always waits for a person, who can publish Opus's rewrite in one click. Every approval is recorded in the Anbaric audit trail against the actor who made it.
 
 ## ADR-006: Every step is an auditable actor
 
