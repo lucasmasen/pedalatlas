@@ -1,4 +1,4 @@
-import {Action, Agent, AnthropicClient, Await} from "anbaric";
+import {Action, Agent, AnthropicClient, Await, SecretStoreFactory, SystemActor} from "anbaric";
 import type {AgentRequest, Job} from "anbaric";
 
 // Each step is done by the model that is good at it, and every step is an
@@ -27,8 +27,16 @@ const JEV_URL = process.env.JEV_API_URL ?? "https://ai-gateway.vercel.sh/v1/eval
 const JEV_MODEL = process.env.JEV_MODEL ?? "typesafe-ai/jev";
 export const RISK_THRESHOLD = 0.5;
 
-const anthropicKey = () => process.env.ANTHROPIC_API_KEY ?? "";
-const jevKey = () => process.env.AI_GATEWAY_API_KEY ?? process.env.JEV_API_KEY ?? "";
+// Keys come from Anbaric's secret store. Deployed, set them with
+// `anbaric secrets set anthropic-api-key` and `anbaric secrets set ai-gateway-api-key`.
+// Locally the store falls back to ANTHROPIC_API_KEY and AI_GATEWAY_API_KEY in the shell.
+const secrets = SecretStoreFactory.instance();
+const secret = async (name : string) : Promise<string> => {
+    try { return (await secrets.retrieve(name, SystemActor.actor)) ?? ""; }
+    catch { return ""; }
+};
+const anthropicKey = () => secret("anthropic-api-key");
+const jevKey = () => secret("ai-gateway-api-key");
 
 const traceOf = async (job : Job) : Promise<Array<TraceStep>> =>
     ((await job.properties.get("trace")) as Array<TraceStep> | undefined) ?? [];
@@ -43,16 +51,18 @@ const stagesOf = async (job : Job) => ((await job.properties.get("stages")) as A
 
 class MeteredClient extends Agent.Client {
     last = {inputTokens: 0, outputTokens: 0};
-    private inner = new AnthropicClient(
-        {apiKey: anthropicKey(), model: HAIKU, maxTokens: 4096},
-        async (url, init) => {
-            const response = await fetch(url, init);
-            const usage = (await response.clone().json().catch(() => ({})))?.usage ?? {};
-            this.last = {inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0};
-            return response;
-        },
-    );
-    generate(request : AgentRequest) { return this.inner.generate(request); }
+    async generate(request : AgentRequest) {
+        const inner = new AnthropicClient(
+            {apiKey: await anthropicKey(), model: HAIKU, maxTokens: 4096},
+            async (url, init) => {
+                const response = await fetch(url, init);
+                const usage = (await response.clone().json().catch(() => ({})))?.usage ?? {};
+                this.last = {inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0};
+                return response;
+            },
+        );
+        return inner.generate(request);
+    }
 }
 
 const haikuClient = new MeteredClient();
@@ -103,7 +113,7 @@ writeBrief.run = async (job) => {
     let brief : string;
     let briefLanguage = language;
     let step : TraceStep;
-    if (anthropicKey()) {
+    if (await anthropicKey()) {
         const out = await haikuClient.generate({messages: briefPrompt(language, stages, notes), outputSchema: BRIEF_SCHEMA});
         brief = String(out.brief ?? "");
         briefLanguage = String(out.briefLanguage ?? language);
@@ -117,7 +127,7 @@ writeBrief.run = async (job) => {
     } else {
         brief = fallbackBrief(stages, notes);
         step = {
-            step: "Write the rider brief", actor: briefer.id, model: "offline fallback (set ANTHROPIC_API_KEY)",
+            step: "Write the rider brief", actor: briefer.id, model: "offline fallback (set the anthropic-api-key secret)",
             ms: Date.now() - started, inputTokens: 0, outputTokens: 0, costUsd: 0,
             note: "No key, so the published notes are listed as they are",
         };
@@ -138,10 +148,10 @@ const probability = (answer : any) : number => {
     return typeof value === "number" ? Math.max(0, Math.min(1, value)) : 0;
 };
 
-const askJev = async (state : string) : Promise<JevAnswers> => {
+const askJev = async (state : string, key : string) : Promise<JevAnswers> => {
     const response = await fetch(JEV_URL, {
         method: "POST",
-        headers: {"content-type": "application/json", "authorization": `Bearer ${jevKey()}`},
+        headers: {"content-type": "application/json", "authorization": `Bearer ${key}`},
         body: JSON.stringify({
             model: JEV_MODEL,
             state,
@@ -177,9 +187,10 @@ scoreRisk.run = async (job) => {
     let answers : JevAnswers;
     let model = JEV_MODEL;
     let note = "Decision model: probabilities, not prose, so the threshold is a number we can tune";
-    if (jevKey()) {
+    const key = await jevKey();
+    if (key) {
         try {
-            answers = await askJev(brief);
+            answers = await askJev(brief, key);
         } catch (error) {
             answers = offlineRisk(notes);
             model = "offline fallback (Jev call failed)";
@@ -187,7 +198,7 @@ scoreRisk.run = async (job) => {
         }
     } else {
         answers = offlineRisk(notes);
-        model = "offline fallback (set AI_GATEWAY_API_KEY)";
+        model = "offline fallback (set the ai-gateway-api-key secret)";
         note = "No key, so the published note categories stand in for Jev";
     }
     const riskScore = Math.max(answers.safety, answers.border);
