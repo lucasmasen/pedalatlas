@@ -38,7 +38,7 @@ The chats are private group conversations, and the riders in them didn't agree t
 
 - **Raw chat exports are not in this repository.** They are processed locally and never committed here.
 - Senders become `rider-` pseudonyms. Phone numbers and emails are removed before anything is stored.
-- **Only the public snapshot reaches a model.** `anbaric/src/atlas.json` holds route stages and a small set of redacted rider notes that have already been cleared for display. Private drafts never leave the laptop.
+- **Only the public snapshot reaches a model.** `anbaric/src/atlas.json` holds route stages and simulated rider notes written for this demo. They are not messages from a real group. Private drafts never leave the laptop.
 - Notes are shown as rider accounts with their dates, never as checked facts.
 - A person approves anything about safety or borders.
 
