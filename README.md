@@ -82,7 +82,7 @@ anbaric app deploy
 
 ### How chat becomes notes (slide demo)
 
-A live, step-by-step demo of the real Python pipeline on simulated rider texts: messages arrive one by one, are redacted and stored, claims are extracted by the community agent, and wiki notes are filed by stage and need. These steps are rule-based; no model writes the notes. No private data or API keys needed.
+A live, step-by-step demo of the real Python pipeline on simulated rider texts: messages arrive one by one, are redacted and stored, claims are extracted by the community agent, and wiki notes are filed by stage and need. These steps are rule-based; no model writes the notes. The last two slides show what happens next: notes scored for safety and border risk and flagged at 0.5, then a person approving or withholding each flagged one. The demo has no model keys, so each note's category stands in for Jev there. No private data or API keys needed.
 
 ```bash
 pip install -e .
