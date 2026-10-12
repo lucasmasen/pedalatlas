@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from demo.wiki_notes.pipeline import load_samples, read_state, save  # noqa: E402
+from demo.wiki_notes.pipeline import decide, load_samples, read_state, save  # noqa: E402
 
 PAGE = Path(__file__).resolve().parent / "page.html"
 PORT = 8091
@@ -42,18 +42,31 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/state":
             state = read_state()
-            self._json(200, state or {"ready": False, "messages": [], "claims": [], "links": [], "places": [], "topics": []})
+            self._json(200, state or {"ready": False, "messages": [], "claims": [], "links": [], "places": [], "topics": [], "scored": [], "reviews": []})
             return
         self._json(404, {"error": "Not found"})
 
     def do_POST(self) -> None:
-        if self.path != "/api/run":
-            self._json(404, {"error": "Not found"})
-            return
         length = int(self.headers.get("content-length", "0") or 0)
-        if length:
-            self.rfile.read(length)
-        self._json(200, save())
+        raw = self.rfile.read(length) if length else b""
+        if self.path == "/api/run":
+            self._json(200, save())
+            return
+        if self.path == "/api/decision":
+            try:
+                body = json.loads(raw.decode() or "{}")
+            except json.JSONDecodeError:
+                self._json(400, {"error": "Send approved: true or false."})
+                return
+            if not isinstance(body.get("approved"), bool) or not isinstance(body.get("id"), str):
+                self._json(400, {"error": "Send approved: true or false."})
+                return
+            try:
+                self._json(200, decide(body["id"], body["approved"]))
+            except ValueError as error:
+                self._json(400, {"error": str(error)})
+            return
+        self._json(404, {"error": "Not found"})
 
 
 def main() -> None:

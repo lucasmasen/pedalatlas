@@ -7,8 +7,10 @@ No model writes these notes.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import sqlite3
 from pathlib import Path
 
@@ -40,8 +42,30 @@ EMPTY = {
     "links": [],
     "places": [],
     "topics": [],
+    "scored": [],
+    "reviews": [],
     "redactions": 0,
 }
+
+# Same labels the route brief uses, and the same offline scores as anbaric/src/agents.ts.
+BRIEF_LABEL = {
+    "Transportation": "Road",
+    "Stay": "Stay",
+    "Resupply": "Resupply",
+    "Water": "Water",
+    "Borders": "Border",
+    "Season": "Season",
+    "Safety": "Safety",
+}
+RISK_THRESHOLD = 0.5
+OPUS_NOTE = "No automated review. Check the brief against the notes by hand."
+DECISION_SCHEMA = """
+CREATE TABLE IF NOT EXISTS moderator_decisions (
+  note_id TEXT PRIMARY KEY,
+  approved INTEGER NOT NULL,
+  reviewed_by TEXT NOT NULL
+);
+"""
 
 
 def load_samples() -> list[dict]:
@@ -140,7 +164,96 @@ def read_state() -> dict | None:
         "places": places,
         "topics": topics,
         "redactions": sum(1 for message in messages if "[redacted-" in message["body"]),
+        **_review_queue(places),
     }
+
+
+def decide(note_id: str, approved: bool) -> dict:
+    """Record a moderator decision for a brief that is waiting on a person."""
+    state = read_state()
+    if state is None:
+        raise ValueError("Save the texts before reviewing a brief.")
+    waiting = {item["id"] for item in state["reviews"]}
+    if note_id not in waiting:
+        raise ValueError("That brief is not waiting for a person.")
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.executescript(DECISION_SCHEMA)
+        conn.execute(
+            """
+            INSERT INTO moderator_decisions (note_id, approved, reviewed_by)
+            VALUES (?, ?, ?)
+            ON CONFLICT(note_id) DO UPDATE SET approved = excluded.approved, reviewed_by = excluded.reviewed_by
+            """,
+            (note_id, int(approved), "dev"),
+        )
+        conn.commit()
+    decided = read_state()
+    if decided is None:
+        raise ValueError("The review was not saved.")
+    return decided
+
+
+def _risk(label: str) -> dict:
+    safety = 0.7 if re.search(r"safety|road", label, re.I) else 0.1
+    border = 0.9 if re.search(r"border", label, re.I) else 0.05
+    score = max(safety, border)
+    reason = "border" if border >= safety else "safety"
+    return {"safety": safety, "border": border, "score": round(score, 2), "reason": reason, "flagged": score >= RISK_THRESHOLD}
+
+
+def _decisions() -> dict[str, dict]:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.executescript(DECISION_SCHEMA)
+        rows = conn.execute("SELECT note_id, approved, reviewed_by FROM moderator_decisions")
+        return {
+            note_id: {"approved": bool(approved), "reviewed_by": reviewed_by}
+            for note_id, approved, reviewed_by in rows
+        }
+
+
+def _review_queue(places: list[dict]) -> dict:
+    """Apply the route machine's flag and human-review gates to the filed notes."""
+    try:
+        decisions = _decisions()
+    except sqlite3.Error:
+        decisions = {}
+    scored = []
+    reviews = []
+    for place in places:
+        for note in place["notes"]:
+            label = BRIEF_LABEL.get(note["topic"], note["topic"])
+            risk = _risk(label)
+            recommendation = "review"
+            # ADR-005: border always waits. Safety publishes only when Opus says approve.
+            needs_human = risk["flagged"] and not (recommendation == "approve" and risk["reason"] != "border")
+            note_id = "rev_" + hashlib.sha256(f"{place['id']}|{note['text']}".encode()).hexdigest()[:12]
+            row = {
+                "id": note_id,
+                "place": place["name"],
+                "label": label,
+                "when": note["when"],
+                "text": note["text"],
+                "brief": f"Riders report ({label}, {note['when']}): {note['text']}",
+                **risk,
+                "recommendation": recommendation,
+                "review_note": OPUS_NOTE if risk["flagged"] else "",
+                "needs_human": needs_human,
+            }
+            scored.append(row)
+            if not needs_human:
+                continue
+            decision = decisions.get(note_id)
+            if decision is None:
+                outcome = "waiting"
+                reviewed_by = ""
+            elif decision["approved"]:
+                outcome = "ready"
+                reviewed_by = decision["reviewed_by"]
+            else:
+                outcome = "withheld"
+                reviewed_by = decision["reviewed_by"]
+            reviews.append({**row, "outcome": outcome, "reviewed_by": reviewed_by})
+    return {"scored": scored, "reviews": reviews}
 
 
 def _rows() -> tuple[list[dict], list[dict], list[dict]]:

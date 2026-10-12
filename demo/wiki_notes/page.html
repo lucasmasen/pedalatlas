@@ -28,6 +28,8 @@
     button, .nav button { border: 0; background: var(--spruce); color: #f6f1e6; padding: 0.55rem 0.85rem; font: inherit; cursor: pointer; }
     button:disabled { opacity: 0.45; cursor: default; }
     button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button.withhold { background: var(--copper); }
+    .review-actions { display: flex; gap: 0.5rem; margin-top: 0.7rem; }
     table { width: 100%; border-collapse: collapse; font-size: 0.84rem; background: var(--card); }
     th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
     th { color: #6a5f54; font-weight: 600; }
@@ -62,7 +64,7 @@
       <p class="wordmark">PedalAtlas</p>
       <p>Under the hood · simulated texts</p>
     </div>
-    <p id="count">1 of 5</p>
+    <p id="count">1 of 7</p>
   </header>
   <main>
     <section class="slide" data-title="A text arrives">
@@ -93,8 +95,20 @@
     <section class="slide" hidden data-title="Topic pages">
       <p class="step">Slide 5 · backend/distill.py topic_digest</p>
       <h2>Topic pages</h2>
-      <p class="lede">The same claims are clustered into the topic pages the site serves: a summary, the clearest tip, and the latest update. Haiku is not in this path. It writes a route brief later, from notes that already exist.</p>
+      <p class="lede">The same claims are clustered into the topic pages the site serves: a summary, the clearest tip, and the latest update. A route brief is a later step. The next slides are what happens when that brief is flagged.</p>
       <div id="topics"></div>
+    </section>
+    <section class="slide" hidden data-title="Flagged for review">
+      <p class="step">Slide 6 · jev-risk-scorer · claude-opus-reviewer</p>
+      <h2>Flagged for review</h2>
+      <p class="lede">Jev scores safety and border risk. At 0.5 or higher, Claude Opus reviews the brief and no one else. There is no model key in this demo, so the note's own category stands in for Jev, and Opus does not recommend approve.</p>
+      <div id="flagged"></div>
+    </section>
+    <section class="slide" hidden data-title="A person decides">
+      <p class="step">Slide 7 · human moderator</p>
+      <h2>A person decides</h2>
+      <p class="lede">Border advice always waits here, whatever Opus recommends. A safety flag waits too, unless Opus recommends approve. The decision is recorded against the person who makes it.</p>
+      <div id="review"></div>
     </section>
   </main>
   <footer>
@@ -113,6 +127,8 @@
     const claims = document.querySelector("#claims");
     const places = document.querySelector("#places");
     const topics = document.querySelector("#topics");
+    const flagged = document.querySelector("#flagged");
+    const review = document.querySelector("#review");
     const count = document.querySelector("#count");
     const status = document.querySelector("#status");
     const dots = document.querySelector("#dots");
@@ -137,7 +153,10 @@
     const show = (number) => {
       index = Math.max(0, Math.min(slides.length - 1, number));
       slides.forEach((slide, item) => { slide.hidden = item !== index; });
-      [...dots.children].forEach((dot, item) => dot.setAttribute("aria-current", item === index ? "true" : "false"));
+      [...dots.children].forEach((dot, item) => {
+        if (item === index) dot.setAttribute("aria-current", "true");
+        else dot.removeAttribute("aria-current");
+      });
       count.textContent = (index + 1) + " of " + slides.length;
       prev.disabled = index === 0;
       next.disabled = index === slides.length - 1;
@@ -213,12 +232,69 @@
       }).join("");
     };
 
+    const renderFlagged = (state) => {
+      const rows = state.scored || [];
+      if (!rows.length) {
+        flagged.innerHTML = "<p class='meta'>Save the texts on the first slide to score these notes.</p>";
+        return;
+      }
+      flagged.innerHTML = "<table><thead><tr><th>Note</th><th>Safety</th><th>Border</th><th>Result</th></tr></thead><tbody>"
+        + rows.map((row) => "<tr><td><strong>" + escapeText(row.place) + " · " + escapeText(row.label) + "</strong><br>" + escapeText(row.text) + "</td><td>"
+          + Number(row.safety).toFixed(2) + "</td><td>" + Number(row.border).toFixed(2) + "</td><td>"
+          + (row.flagged ? "<span class='tag'>Flagged · " + escapeText(row.reason) + "</span>" : "<span class='kept'>Under 0.50 · stays published</span>")
+          + "</td></tr>").join("")
+        + "</tbody></table>";
+    };
+
+    const renderReview = (state) => {
+      const rows = state.reviews || [];
+      if (!rows.length) {
+        review.innerHTML = "<p class='meta'>Nothing is waiting for a person yet.</p>";
+        return;
+      }
+      review.innerHTML = rows.map((row) => {
+        let outcome = "<p class='meta'>Claude Opus advises " + escapeText(row.recommendation) + ": " + escapeText(row.review_note) + "</p>";
+        if (row.reason === "border") outcome += "<p class='tag'>Border advice waits for a person even if Opus recommends approve.</p>";
+        else outcome += "<p class='tag'>Opus did not recommend approve, so a person decides.</p>";
+        if (row.outcome === "waiting") {
+          outcome += "<div class='review-actions'><button type='button' data-approve='true' data-id='" + escapeText(row.id) + "'>Approve for riders</button><button type='button' class='withhold' data-approve='false' data-id='" + escapeText(row.id) + "'>Withhold</button></div>";
+        } else if (row.outcome === "withheld") {
+          outcome += "<p class='who'>Withheld by " + escapeText(row.reviewed_by) + "</p><p>A moderator kept this brief back.</p>";
+        } else {
+          outcome += "<p class='who'>Approved by " + escapeText(row.reviewed_by) + "</p><p>Recorded in the audit trail as a human decision.</p>";
+        }
+        return "<article><p class='who'>" + escapeText(row.place) + "</p><p>" + escapeText(row.brief) + "</p>" + outcome + "</article>";
+      }).join("");
+      review.querySelectorAll("[data-approve]").forEach((button) => {
+        button.addEventListener("click", () => decide(button.dataset.id, button.dataset.approve === "true"));
+      });
+    };
+
+    const decide = async (id, approved) => {
+      review.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+      status.textContent = "Recording the decision…";
+      const response = await fetch("/api/decision", {
+        method: "POST",
+        headers: {"content-type": "application/json"},
+        body: JSON.stringify({id, approved}),
+      });
+      const state = await response.json();
+      if (!response.ok) {
+        status.textContent = state.error || "That decision was not saved.";
+        return;
+      }
+      paint(state);
+      show(index);
+    };
+
     const paint = (state) => {
       ready = Boolean(state.ready);
       renderMessages(state);
       renderClaims(state);
       renderPlaces(state);
       renderTopics(state);
+      renderFlagged(state);
+      renderReview(state);
       status.textContent = ready
         ? "Saved in the local demo database. Arrow keys move between slides."
         : "Arrow keys move between slides.";
